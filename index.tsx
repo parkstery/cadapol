@@ -42,6 +42,7 @@ const App = () => {
             setMap(kakaoMap);
             
             // 지도 클릭 이벤트 등록
+            // 중요: 여기서 kakaoMap 인스턴스를 핸들러에 전달하여 클로저 문제 해결
             kakao.maps.event.addListener(kakaoMap, 'click', (mouseEvent: any) => {
               handleMapClick(mouseEvent.latLng, kakaoMap);
             });
@@ -151,39 +152,60 @@ const App = () => {
       }
     });
 
-    // 3. 지적 정보 데이터 호출 (JSONP 방식)
-    fetchCadastralDataJSONP(latlng.getLng(), latlng.getLat());
+    // 3. 지적 정보 데이터 호출 (2단계 방식: PNU 조회 -> Geometry 조회)
+    fetchCadastralInfoStep1(latlng.getLng(), latlng.getLat(), currentMap);
   };
 
   /**
-   * CORS 문제를 완벽하게 회피하기 위한 JSONP 요청 함수
-   * fetch 대신 script 태그를 동적으로 생성하여 실행합니다.
+   * [1단계] 클릭한 위치(POINT)로 PNU 및 속성 정보를 조회합니다.
+   * Advisor Note: POINT 쿼리는 Geometry 반환이 불안정하므로 속성(PNU) 획득에 집중합니다.
    */
-  const fetchCadastralDataJSONP = (lng: number, lat: number) => {
+  const fetchCadastralInfoStep1 = (lng: number, lat: number, currentMap: any) => {
     setLoading(true);
     setSidebarOpen(true);
-    setSelectedInfo(null); // 이전 정보 초기화
+    setSelectedInfo(null);
 
-    const callbackName = `vworld_callback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const callbackName = `vworld_step1_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     
-    // 전역 스코프에 콜백 함수 등록
     (window as any)[callbackName] = (data: any) => {
-      processVWorldData(data);
       // 정리
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
+
+      if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
+        const feature = data.response.result.featureCollection.features[0];
+        const pnu = feature.properties.pnu;
+        
+        // 속성 정보 설정
+        setSelectedInfo({
+          pnu: pnu,
+          addr: feature.properties.addr,
+          jibun: feature.properties.jibun,
+          area: feature.properties.area,
+          bonbun: feature.properties.bonbun,
+          bubun: feature.properties.bubun,
+        });
+
+        // 2단계: PNU로 정확한 폴리곤 조회 호출
+        if (pnu) {
+          fetchGeometryByPNUStep2(pnu, currentMap);
+        } else {
+            setLoading(false);
+        }
+      } else {
+        setLoading(false);
+        setSelectedInfo({ error: '해당 위치의 지적 정보를 찾을 수 없습니다.' });
+      }
     };
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // callback 파라미터를 포함한 VWorld API URL
-    // crs=EPSG:4326 추가하여 좌표계 명시
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&geometry=true&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&callback=${callbackName}`;
+    // 1단계는 geomFilter=POINT 사용. geometry=false여도 PNU는 나옴 (여기선 true로 두되 신뢰하지 않음)
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&callback=${callbackName}`;
     
     script.onerror = () => {
-      console.error("JSONP Script Error");
-      setSelectedInfo({ error: '데이터를 가져오는데 실패했습니다. (API 키/도메인 또는 네트워크 확인 필요)' });
       setLoading(false);
+      setSelectedInfo({ error: '데이터 로드 실패 (네트워크/도메인)' });
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
     };
@@ -191,49 +213,69 @@ const App = () => {
     document.body.appendChild(script);
   };
 
-  const processVWorldData = (data: any) => {
-    setLoading(false);
-    if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
-      const feature = data.response.result.featureCollection.features[0];
-      
-      setSelectedInfo({
-        pnu: feature.properties.pnu,
-        addr: feature.properties.addr,
-        jibun: feature.properties.jibun,
-        area: feature.properties.area,
-        bonbun: feature.properties.bonbun,
-        bubun: feature.properties.bubun,
-      });
+  /**
+   * [2단계] PNU를 사용하여 정확한 Geometry를 조회합니다.
+   * Advisor Note: attrFilter=pnu:like:{pnu} 방식을 사용하면 EPSG:4326 좌표계가 더 정확하게 적용된 Geometry를 얻을 수 있습니다.
+   */
+  const fetchGeometryByPNUStep2 = (pnu: string, currentMap: any) => {
+    const callbackName = `vworld_step2_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    
+    (window as any)[callbackName] = (data: any) => {
+      setLoading(false);
+      delete (window as any)[callbackName];
+      document.getElementById(callbackName)?.remove();
 
-      // 폴리곤 그리기
-      if (feature.geometry) {
-        drawParcelPolygon(feature.geometry);
+      if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
+        const feature = data.response.result.featureCollection.features[0];
+        
+        if (feature.geometry) {
+          drawParcelPolygon(feature.geometry, currentMap);
+        } else {
+           console.warn("PNU query returned no geometry");
+        }
       }
-    } else {
-      setSelectedInfo({ error: '해당 위치의 지적 정보를 찾을 수 없습니다.' });
-    }
+    };
+
+    const script = document.createElement('script');
+    script.id = callbackName;
+    // attrFilter 사용. pnu가 일치하는 필지 검색. crs=EPSG:4326 필수.
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&attrFilter=pnu:like:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&callback=${callbackName}`;
+    
+    document.body.appendChild(script);
   };
 
-  const drawParcelPolygon = (geometry: any) => {
+  const drawParcelPolygon = (geometry: any, currentMap: any) => {
     const kakao = (window as any).kakao;
-    if (!map || !kakao || !geometry) return;
+    
+    if (!currentMap || !kakao || !geometry) return;
 
     let paths: any[] = [];
     
     // GeoJSON 좌표를 Kakao LatLng로 변환하는 헬퍼 함수
     const parsePolygon = (coordinates: any[]) => {
-        // GeoJSON은 [lng, lat] 순서, Kakao는 (lat, lng) 순서
-        // 배열의 첫 번째 요소가 외곽선(Outer Ring)입니다.
+        if (!coordinates || coordinates.length === 0) return [];
+        
+        // Advisor Note: 좌표 유효성 검사 (좌표계 변환 실패로 인한 TM 좌표 유입 방지)
+        // 위도는 보통 33~38(Lat), 경도는 124~132(Lng) 사이여야 함.
+        const firstPoint = coordinates[0][0]; // [lng, lat]
+        if (firstPoint && (firstPoint[0] > 180 || firstPoint[1] > 90)) {
+            console.error("Detected Non-WGS84 Coordinates (Likely TM):", firstPoint);
+            // 에러를 UI에 표시하거나 단순히 그리지 않음
+            return []; 
+        }
+
+        // GeoJSON [lng, lat] -> Kakao (lat, lng)
         return coordinates[0].map((coord: number[]) => new kakao.maps.LatLng(coord[1], coord[0]));
     };
 
     try {
       if (geometry.type === 'Polygon') {
-        paths.push(parsePolygon(geometry.coordinates));
+        const path = parsePolygon(geometry.coordinates);
+        if (path.length > 0) paths.push(path);
       } else if (geometry.type === 'MultiPolygon') {
-        // MultiPolygon의 경우 여러 개의 Polygon 좌표 배열을 처리
         geometry.coordinates.forEach((polygonCoords: any[]) => {
-            paths.push(parsePolygon(polygonCoords));
+            const path = parsePolygon(polygonCoords);
+            if (path.length > 0) paths.push(path);
         });
       }
     } catch (e) {
@@ -242,19 +284,20 @@ const App = () => {
     }
 
     if (paths.length > 0) {
-      // paths가 여러 개일 경우 MultiPolygon 처럼 동작 (혹은 구멍 뚫린 폴리곤 처리)
-      // Kakao Polygon은 이중 배열을 받아 처리 가능
       const polygon = new kakao.maps.Polygon({
         path: paths.length === 1 ? paths[0] : paths,
         strokeWeight: 3,
-        strokeColor: '#f97316', // Orange-500 (지적도 경계 강조색)
+        strokeColor: '#f97316', // Orange-500
         strokeOpacity: 1,
         strokeStyle: 'solid',
         fillColor: '#f97316',
         fillOpacity: 0.2
       });
-      polygon.setMap(map);
+      polygon.setMap(currentMap);
       polygonRef.current = polygon;
+    } else {
+        // 좌표 변환 실패 등으로 path가 비어있을 경우 에러 업데이트
+        setSelectedInfo((prev: any) => ({ ...prev, error: '경계 데이터를 지도 좌표로 변환하지 못했습니다.' }));
     }
   };
 
