@@ -177,7 +177,8 @@ const App = () => {
     const script = document.createElement('script');
     script.id = callbackName;
     // callback 파라미터를 포함한 VWorld API URL
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&geometry=true&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&callback=${callbackName}`;
+    // crs=EPSG:4326 추가하여 좌표계 명시
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&geometry=true&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&callback=${callbackName}`;
     
     script.onerror = () => {
       console.error("JSONP Script Error");
@@ -217,28 +218,40 @@ const App = () => {
     const kakao = (window as any).kakao;
     if (!map || !kakao || !geometry) return;
 
-    let path: any[] = [];
+    let paths: any[] = [];
     
+    // GeoJSON 좌표를 Kakao LatLng로 변환하는 헬퍼 함수
+    const parsePolygon = (coordinates: any[]) => {
+        // GeoJSON은 [lng, lat] 순서, Kakao는 (lat, lng) 순서
+        // 배열의 첫 번째 요소가 외곽선(Outer Ring)입니다.
+        return coordinates[0].map((coord: number[]) => new kakao.maps.LatLng(coord[1], coord[0]));
+    };
+
     try {
       if (geometry.type === 'Polygon') {
-        path = geometry.coordinates[0].map((coord: number[]) => new kakao.maps.LatLng(coord[1], coord[0]));
+        paths.push(parsePolygon(geometry.coordinates));
       } else if (geometry.type === 'MultiPolygon') {
-        path = geometry.coordinates[0][0].map((coord: number[]) => new kakao.maps.LatLng(coord[1], coord[0]));
+        // MultiPolygon의 경우 여러 개의 Polygon 좌표 배열을 처리
+        geometry.coordinates.forEach((polygonCoords: any[]) => {
+            paths.push(parsePolygon(polygonCoords));
+        });
       }
     } catch (e) {
       console.error("Geometry parsing error", e);
       return;
     }
 
-    if (path.length > 0) {
+    if (paths.length > 0) {
+      // paths가 여러 개일 경우 MultiPolygon 처럼 동작 (혹은 구멍 뚫린 폴리곤 처리)
+      // Kakao Polygon은 이중 배열을 받아 처리 가능
       const polygon = new kakao.maps.Polygon({
-        path: path,
+        path: paths.length === 1 ? paths[0] : paths,
         strokeWeight: 3,
-        strokeColor: '#3b82f6',
-        strokeOpacity: 0.9,
+        strokeColor: '#f97316', // Orange-500 (지적도 경계 강조색)
+        strokeOpacity: 1,
         strokeStyle: 'solid',
-        fillColor: '#3b82f6',
-        fillOpacity: 0.3
+        fillColor: '#f97316',
+        fillOpacity: 0.2
       });
       polygon.setMap(map);
       polygonRef.current = polygon;
@@ -290,8 +303,8 @@ const App = () => {
           {loading ? (
             <div className="flex flex-col items-center justify-center h-48 gap-4">
               <div className="relative">
-                <Activity className="w-10 h-10 text-blue-500 animate-spin" />
-                <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse"></div>
+                <Activity className="w-10 h-10 text-orange-500 animate-spin" />
+                <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full animate-pulse"></div>
               </div>
               <p className="text-sm text-slate-300 font-medium">지적 경계 추출 중...</p>
             </div>
@@ -302,11 +315,14 @@ const App = () => {
               </div>
             ) : (
               <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2">
-                <div className="bg-blue-600/20 border border-blue-400/30 p-5 rounded-2xl shadow-inner group">
-                  <div className="flex items-start gap-3">
-                    <MapPin className="w-5 h-5 text-blue-400 mt-1 flex-shrink-0" />
+                <div className="bg-gradient-to-br from-orange-500/20 to-blue-600/20 border border-white/10 p-5 rounded-2xl shadow-inner group relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-3 opacity-20">
+                    <MapIcon className="w-16 h-16 text-white" />
+                  </div>
+                  <div className="relative flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div className="space-y-1">
-                      <label className="text-[10px] text-blue-300/70 uppercase font-bold tracking-widest">지번 주소</label>
+                      <label className="text-[10px] text-orange-300/70 uppercase font-bold tracking-widest">지번 주소</label>
                       <p className="text-lg font-bold text-white leading-snug">{selectedInfo.addr || '정보 없음'}</p>
                     </div>
                   </div>
