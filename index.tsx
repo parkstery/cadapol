@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Layers, Info, Layers as LayerIcon, Map as MapIcon, X, ChevronRight, Activity, MapPin, Copy, Search } from 'lucide-react';
+import proj4 from 'proj4'; // npm install proj4 @types/proj4
 
 /**
  * 환경 설정: VWorld API 키 및 도메인
- * 주의: VWorld API 키는 해당 도메인(https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
+ * 주의: VWorld API 키는 해당 도메[](https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
  */
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44'; 
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
@@ -172,6 +173,8 @@ const App = () => {
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
+      console.log('Step1 Response:', data); // 디버깅 로그 추가
+
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         const pnu = feature.properties.pnu;
@@ -200,8 +203,8 @@ const App = () => {
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // 1단계는 geomFilter=POINT 사용. geometry=false여도 PNU는 나옴 (여기선 true로 두되 신뢰하지 않음)
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&callback=${callbackName}`;
+    // 1단계는 geomFilter=POINT 사용. geometry=true 추가
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     
     script.onerror = () => {
       setLoading(false);
@@ -215,7 +218,7 @@ const App = () => {
 
   /**
    * [2단계] PNU를 사용하여 정확한 Geometry를 조회합니다.
-   * Advisor Note: attrFilter=pnu:like:{pnu} 방식을 사용하면 EPSG:4326 좌표계가 더 정확하게 적용된 Geometry를 얻을 수 있습니다.
+   * Advisor Note: attrFilter=pnu:=:{pnu} 방식을 사용하면 EPSG:4326 좌표계가 더 정확하게 적용된 Geometry를 얻을 수 있습니다.
    */
   const fetchGeometryByPNUStep2 = (pnu: string, currentMap: any) => {
     const callbackName = `vworld_step2_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
@@ -225,6 +228,8 @@ const App = () => {
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
+      console.log('Step2 Response:', data); // 디버깅 로그 추가
+
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         
@@ -232,14 +237,17 @@ const App = () => {
           drawParcelPolygon(feature.geometry, currentMap);
         } else {
            console.warn("PNU query returned no geometry");
+           setSelectedInfo((prev: any) => ({ ...prev, error: '경계 데이터가 없습니다.' }));
         }
+      } else {
+        setSelectedInfo((prev: any) => ({ ...prev, error: '경계 조회 실패' }));
       }
     };
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // attrFilter 사용. pnu가 일치하는 필지 검색. crs=EPSG:4326 필수.
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&attrFilter=pnu:like:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&callback=${callbackName}`;
+    // attrFilter 사용. pnu가 정확히 일치하는 필지 검색 (= 사용). crs=EPSG:4326 필수. geometry=true 추가.
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     
     document.body.appendChild(script);
   };
@@ -251,41 +259,51 @@ const App = () => {
 
     let paths: any[] = [];
     
-    // GeoJSON 좌표를 Kakao LatLng로 변환하는 헬퍼 함수
+    // GeoJSON 좌표를 Kakao LatLng로 변환하는 헬퍼 함수 (TM 변환 포함)
     const parsePolygon = (coordinates: any[]) => {
-        if (!coordinates || coordinates.length === 0) return [];
-        
-        // Advisor Note: 좌표 유효성 검사 (좌표계 변환 실패로 인한 TM 좌표 유입 방지)
-        // 위도는 보통 33~38(Lat), 경도는 124~132(Lng) 사이여야 함.
-        const firstPoint = coordinates[0][0]; // [lng, lat]
-        if (firstPoint && (firstPoint[0] > 180 || firstPoint[1] > 90)) {
-            console.error("Detected Non-WGS84 Coordinates (Likely TM):", firstPoint);
-            // 에러를 UI에 표시하거나 단순히 그리지 않음
-            return []; 
-        }
+      if (!coordinates || coordinates.length === 0) return [];
+      
+      const firstPoint = coordinates[0][0]; // [x/lng, y/lat]
+      let isTM = firstPoint[0] > 180 || firstPoint[1] > 90;
 
-        // GeoJSON [lng, lat] -> Kakao (lat, lng)
-        return coordinates[0].map((coord: number[]) => new kakao.maps.LatLng(coord[1], coord[0]));
+      if (isTM) {
+        console.warn("Converting TM (EPSG:5179) to WGS84 (EPSG:4326)");
+        proj4.defs("EPSG:5179", "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs");
+        const proj = proj4("EPSG:5179", "EPSG:4326");
+        
+        // 모든 링 (outer + holes) 변환
+        return coordinates.map((ring: number[][]) => 
+          ring.map(coord => {
+            const [lon, lat] = proj.forward([coord[0], coord[1]]);
+            return new kakao.maps.LatLng(lat, lon);
+          })
+        );
+      } else {
+        // WGS84: [lng, lat] -> LatLng(lat, lng), 모든 링 처리
+        return coordinates.map((ring: number[][]) => 
+          ring.map(coord => new kakao.maps.LatLng(coord[1], coord[0]))
+        );
+      }
     };
 
     try {
       if (geometry.type === 'Polygon') {
-        const path = parsePolygon(geometry.coordinates);
-        if (path.length > 0) paths.push(path);
+        paths = parsePolygon(geometry.coordinates);
       } else if (geometry.type === 'MultiPolygon') {
-        geometry.coordinates.forEach((polygonCoords: any[]) => {
-            const path = parsePolygon(polygonCoords);
-            if (path.length > 0) paths.push(path);
+        geometry.coordinates.forEach((polyCoords: any[]) => {
+          const polyPaths = parsePolygon(polyCoords);
+          paths = [...paths, ...polyPaths];
         });
       }
     } catch (e) {
       console.error("Geometry parsing error", e);
+      setSelectedInfo((prev: any) => ({ ...prev, error: '경계 파싱 오류' }));
       return;
     }
 
     if (paths.length > 0) {
       const polygon = new kakao.maps.Polygon({
-        path: paths.length === 1 ? paths[0] : paths,
+        path: paths, // holes 지원 (LatLng[][])
         strokeWeight: 3,
         strokeColor: '#f97316', // Orange-500
         strokeOpacity: 1,
