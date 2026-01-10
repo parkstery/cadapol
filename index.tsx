@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Layers, Info, Layers as LayerIcon, Map as MapIcon, X, ChevronRight, Activity, MapPin, Copy, Search, Loader2 } from 'lucide-react';
+import { Layers, Info, Layers as LayerIcon, Map as MapIcon, X, ChevronRight, Activity, MapPin, Copy, Search } from 'lucide-react';
+
+/**
+ * 환경 설정: VWorld API 키 및 도메인
+ * 주의: VWorld API 키는 해당 도메인(https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
+ */
+const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44'; 
+const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
 
 const App = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -13,18 +20,17 @@ const App = () => {
   
   // 지도 객체 관리를 위한 ref
   const markerRef = useRef<any>(null);
-  const overlayRef = useRef<any>(null); // InfoWindow 대신 CustomOverlay 사용
-  const timerRef = useRef<any>(null); // 자동 제거 타이머
-  const polygonRef = useRef<any>(null); // 지적도 폴리곤
+  const polygonRef = useRef<any>(null);
+  const overlayRef = useRef<any>(null);
 
   useEffect(() => {
+    console.log("App Initializing..."); // Cache Busting Log
     let retryCount = 0;
     const maxRetries = 50;
 
     const initMap = () => {
       const kakao = (window as any).kakao;
-      // kakao.maps.services 라이브러리까지 로드되었는지 확인
-      if (kakao && kakao.maps && kakao.maps.services) {
+      if (kakao && kakao.maps) {
         kakao.maps.load(() => {
           if (!mapContainer.current) return;
           try {
@@ -39,7 +45,6 @@ const App = () => {
             kakao.maps.event.addListener(kakaoMap, 'click', (mouseEvent: any) => {
               handleMapClick(mouseEvent.latLng, kakaoMap);
             });
-            console.log("Kakao Map Initialized");
           } catch (e) {
             console.error("Map initialization failed:", e);
           }
@@ -52,27 +57,19 @@ const App = () => {
     initMap();
   }, []);
 
-  // 기존 그래픽 및 타이머 정리 함수
+  // 기존에 그려진 마커, 폴리곤, 오버레이 제거
   const clearGraphics = () => {
-    // 1. 기존 마커 제거
     if (markerRef.current) {
       markerRef.current.setMap(null);
       markerRef.current = null;
     }
-    // 2. 기존 오버레이 제거
-    if (overlayRef.current) {
-      overlayRef.current.setMap(null);
-      overlayRef.current = null;
-    }
-    // 3. 기존 타이머 제거
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    // 4. 기존 폴리곤 제거
     if (polygonRef.current) {
       polygonRef.current.setMap(null);
       polygonRef.current = null;
+    }
+    if (overlayRef.current) {
+      overlayRef.current.setMap(null);
+      overlayRef.current = null;
     }
   };
 
@@ -80,108 +77,121 @@ const App = () => {
     const kakao = (window as any).kakao;
     if (!currentMap || !kakao) return;
 
-    // 기존 요소 초기화
     clearGraphics();
 
-    // ----------------------------------------------------
-    // [1단계] 마커 및 주소 표시 (CustomOverlay)
-    // ----------------------------------------------------
-    
-    // 1. 마커 생성
-    const marker = new kakao.maps.Marker({ 
-      position: latlng,
-      map: currentMap,
-      zIndex: 1 
-    });
+    // 1. 클릭 위치에 마커 표시
+    const marker = new kakao.maps.Marker({ position: latlng });
+    marker.setMap(currentMap);
     markerRef.current = marker;
 
-    // 2. 좌표 -> 주소 변환
+    // 2. 주소 변환 및 커스텀 오버레이(윈도우 텍스트창) 표시
     const geocoder = new kakao.maps.services.Geocoder();
     geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result: any, status: any) => {
-      let address = '주소정보 없음';
-      
-      if (status === kakao.maps.services.Status.OK && result[0]) {
-        const addrObj = result[0];
-        if (addrObj.road_address) {
-          address = addrObj.road_address.address_name;
-        } else if (addrObj.address) {
-          address = addrObj.address.address_name;
-        }
+      if (status === kakao.maps.services.Status.OK) {
+        const roadAddr = result[0].road_address ? result[0].road_address.address_name : '';
+        const jibunAddr = result[0].address ? result[0].address.address_name : '';
+        const mainAddr = roadAddr || jibunAddr;
+        const subAddr = roadAddr ? jibunAddr : '';
+        
+        // 커스텀 오버레이 디자인 (말풍선 스타일)
+        const content = `
+          <div style="
+            position: relative;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-family: 'Pretendard', sans-serif;
+            min-width: 200px;
+            max-width: 260px;
+            transform: translateY(-40px);
+            animation: fadeIn 0.3s ease-out;
+          ">
+            <div style="font-size: 11px; color: #3b82f6; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+              <span style="width: 6px; height: 6px; background: #3b82f6; border-radius: 50%;"></span>
+              Selected Location
+            </div>
+            <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
+              ${mainAddr}
+            </div>
+            ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
+            
+            <!-- 말풍선 꼬리 -->
+            <div style="
+              position: absolute;
+              bottom: -6px;
+              left: 50%;
+              transform: translateX(-50%) rotate(45deg);
+              width: 12px;
+              height: 12px;
+              background: rgba(255, 255, 255, 0.95);
+              border-bottom: 1px solid rgba(0,0,0,0.1);
+              border-right: 1px solid rgba(0,0,0,0.1);
+            "></div>
+          </div>
+          <style>
+            @keyframes fadeIn {
+              from { opacity: 0; transform: translateY(-35px); }
+              to { opacity: 1; transform: translateY(-40px); }
+            }
+          </style>
+        `;
+
+        const overlay = new kakao.maps.CustomOverlay({
+          content: content,
+          map: currentMap,
+          position: latlng,
+          yAnchor: 1,
+          zIndex: 100
+        });
+
+        overlayRef.current = overlay;
       }
-
-      // 3. CustomOverlay 컨텐츠
-      const contentHTML = `
-        <div style="
-          background: white;
-          border: 1px solid #444;
-          padding: 8px 10px;
-          border-radius: 6px;
-          font-size: 12px;
-          white-space: nowrap;
-          box-shadow: 1px 2px 4px rgba(0,0,0,0.3);
-          font-family: 'Pretendard', sans-serif;
-          color: #333;
-        ">
-          <div style="font-weight:bold; margin-bottom:2px;">📍 ${address}</div>
-          <span style="color:#666; font-size:11px;">
-            (${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)})
-          </span>
-        </div>
-      `;
-
-      // 4. CustomOverlay 표시
-      const overlay = new kakao.maps.CustomOverlay({
-        map: currentMap,
-        position: latlng,
-        content: contentHTML,
-        yAnchor: 2.3
-      });
-      overlayRef.current = overlay;
-
-      // 5. 5초 후 자동 제거
-      timerRef.current = setTimeout(() => {
-        clearGraphics();
-      }, 5000);
     });
 
-    // ----------------------------------------------------
-    // [2단계] 지적 정보 데이터 호출 (VWorld Proxy)
-    // ----------------------------------------------------
-    fetchCadastralData(latlng.getLng(), latlng.getLat());
+    // 3. 지적 정보 데이터 호출 (JSONP 방식)
+    fetchCadastralDataJSONP(latlng.getLng(), latlng.getLat());
   };
 
   /**
-   * 프록시 서버(/api/vworld)를 통한 지적도 데이터 요청
+   * CORS 문제를 완벽하게 회피하기 위한 JSONP 요청 함수
+   * fetch 대신 script 태그를 동적으로 생성하여 실행합니다.
    */
-  const fetchCadastralData = async (lng: number, lat: number) => {
+  const fetchCadastralDataJSONP = (lng: number, lat: number) => {
     setLoading(true);
     setSidebarOpen(true);
     setSelectedInfo(null); // 이전 정보 초기화
 
-    try {
-      // 캐시 방지를 위해 timestamp 추가
-      const url = `/api/vworld?lng=${lng}&lat=${lat}&t=${Date.now()}`;
-      console.log('Fetching cadastral data via Proxy:', url);
-      
-      const response = await fetch(url);
-      
-      // HTML 응답(404 페이지 등)이 오는지 확인
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("서버에서 올바른 JSON 응답을 받지 못했습니다. (API 경로 확인 필요)");
-      }
-
-      const data = await response.json();
+    const callbackName = `vworld_callback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    
+    // 전역 스코프에 콜백 함수 등록
+    (window as any)[callbackName] = (data: any) => {
       processVWorldData(data);
-    } catch (error) {
-      console.error("Failed to fetch cadastral data:", error);
-      setSelectedInfo({ error: "데이터를 가져오는데 실패했습니다. (API Proxy Error)" });
-    } finally {
+      // 정리
+      delete (window as any)[callbackName];
+      document.getElementById(callbackName)?.remove();
+    };
+
+    const script = document.createElement('script');
+    script.id = callbackName;
+    // callback 파라미터를 포함한 VWorld API URL
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&geometry=true&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&callback=${callbackName}`;
+    
+    script.onerror = () => {
+      console.error("JSONP Script Error");
+      setSelectedInfo({ error: '데이터를 가져오는데 실패했습니다. (API 키/도메인 또는 네트워크 확인 필요)' });
       setLoading(false);
-    }
+      delete (window as any)[callbackName];
+      document.getElementById(callbackName)?.remove();
+    };
+
+    document.body.appendChild(script);
   };
 
   const processVWorldData = (data: any) => {
+    setLoading(false);
     if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
       const feature = data.response.result.featureCollection.features[0];
       
@@ -189,7 +199,7 @@ const App = () => {
         pnu: feature.properties.pnu,
         addr: feature.properties.addr,
         jibun: feature.properties.jibun,
-        area: feature.properties.area, // null일 수 있음
+        area: feature.properties.area,
         bonbun: feature.properties.bonbun,
         bubun: feature.properties.bubun,
       });
@@ -224,11 +234,11 @@ const App = () => {
       const polygon = new kakao.maps.Polygon({
         path: path,
         strokeWeight: 3,
-        strokeColor: '#ef4444', // 붉은색 강조
+        strokeColor: '#3b82f6',
         strokeOpacity: 0.9,
         strokeStyle: 'solid',
-        fillColor: '#ef4444',
-        fillOpacity: 0.2
+        fillColor: '#3b82f6',
+        fillOpacity: 0.3
       });
       polygon.setMap(map);
       polygonRef.current = polygon;
@@ -266,54 +276,69 @@ const App = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-           {loading ? (
-             <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-3">
-               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-               <p className="text-sm">지적 정보를 불러오는 중...</p>
-             </div>
-           ) : selectedInfo ? (
-             selectedInfo.error ? (
-                <div className="text-center mt-12 p-8 border-2 border-dashed border-red-500/20 rounded-3xl flex flex-col items-center gap-4">
-                  <Activity className="w-8 h-8 text-red-500" />
-                  <p className="text-sm text-red-400">{selectedInfo.error}</p>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-48 gap-4">
+              <div className="relative">
+                <Activity className="w-10 h-10 text-blue-500 animate-spin" />
+                <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse"></div>
+              </div>
+              <p className="text-sm text-slate-300 font-medium">지적 경계 추출 중...</p>
+            </div>
+          ) : selectedInfo ? (
+            selectedInfo.error ? (
+              <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-sm text-red-300 leading-relaxed">
+                {selectedInfo.error}
+              </div>
+            ) : (
+              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2">
+                <div className="bg-blue-600/20 border border-blue-400/30 p-5 rounded-2xl shadow-inner group">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-blue-400 mt-1 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-blue-300/70 uppercase font-bold tracking-widest">지번 주소</label>
+                      <p className="text-lg font-bold text-white leading-snug">{selectedInfo.addr || '정보 없음'}</p>
+                    </div>
+                  </div>
                 </div>
-             ) : (
-                <div className="space-y-4 animate-fadeIn">
-                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <label className="text-xs font-bold text-blue-400 mb-1 block">주소</label>
-                    <div className="text-white font-medium text-sm leading-relaxed">{selectedInfo.addr}</div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">PNU Code</label>
+                      <button className="text-blue-400 hover:text-blue-300"><Copy className="w-3 h-3"/></button>
+                    </div>
+                    <p className="text-xs font-mono text-blue-200 break-all">{selectedInfo.pnu}</p>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                      <label className="text-xs font-bold text-slate-400 mb-1 block">지번</label>
-                      <div className="text-white font-medium">{selectedInfo.jibun}</div>
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                      <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">면적</label>
+                      <p className="text-sm font-bold text-white mt-1">{selectedInfo.area || '0'} <span className="text-[10px] font-normal text-slate-400 ml-1">m²</span></p>
                     </div>
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                      <label className="text-xs font-bold text-slate-400 mb-1 block">공시지가/면적</label>
-                      <div className="text-white font-medium truncate">{selectedInfo.area ? `${selectedInfo.area}㎡` : '-'}</div>
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                      <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">지번</label>
+                      <p className="text-sm font-bold text-white mt-1">{selectedInfo.jibun}</p>
                     </div>
                   </div>
 
-                  <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <label className="text-xs font-bold text-slate-400 mb-1 block">PNU 코드</label>
-                    <div className="text-slate-300 font-mono text-xs tracking-wider">{selectedInfo.pnu}</div>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">본번 - 부번</label>
+                    <p className="text-sm font-bold text-white mt-1">{selectedInfo.bonbun} - {selectedInfo.bubun}</p>
                   </div>
                 </div>
-             )
-           ) : (
+              </div>
+            )
+          ) : (
             <div className="text-center mt-12 p-8 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center gap-4">
               <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
                 <Search className="w-6 h-6 text-slate-500" />
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                지도상의 위치를 클릭하여<br/>주소와 상세 정보를 확인하세요.
-              </p>
+              <p className="text-sm text-slate-400 leading-relaxed">지도상의 필지를 클릭하여<br/>지적 정보와 경계를 확인하세요.</p>
             </div>
-           )}
+          )}
         </div>
         <div className="p-5 text-[10px] text-slate-500 text-center border-t border-white/10 bg-black/10 tracking-tight">
-          &copy; Kakao Maps & VWorld
+          &copy; Kakao Maps & VWorld GIS Data API
         </div>
       </div>
 
@@ -361,13 +386,6 @@ const App = () => {
           background: rgba(255, 255, 255, 0.75);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.4s ease-out forwards;
         }
       `}</style>
     </div>
