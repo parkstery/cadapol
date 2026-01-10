@@ -218,17 +218,19 @@ const App = () => {
             setLoading(false);
         }
       } else {
-        addLog(`❌ Step 1 Failed: No features found`);
+        // 상세 에러 로깅
+        const errorMsg = data?.response?.error?.text || 'No features found';
+        addLog(`❌ Step 1 Failed: ${errorMsg}`);
         setLoading(false);
-        setSelectedInfo({ error: '해당 위치의 지적 정보를 찾을 수 없습니다.' });
+        setSelectedInfo({ error: `지적 정보 조회 실패: ${errorMsg}` });
       }
     };
 
     const script = document.createElement('script');
     script.id = callbackName;
     // 1단계는 geomFilter=POINT 사용. geometry=true 추가
-    // 수정: data=LP_PA_CB_ND_BU (연속지적도 표준 레이어)
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    // 수정: data=LP_PA_CBND_BUBUN (올바른 연속지적도 레이어 ID)
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     
     script.onerror = () => {
       addLog(`❌ Step 1 Network/Script Error`);
@@ -268,16 +270,17 @@ const App = () => {
            setSelectedInfo((prev: any) => ({ ...prev, error: '경계 데이터가 없습니다.' }));
         }
       } else {
-        addLog(`❌ Step 2 Failed: Feature not found for PNU`);
-        setSelectedInfo((prev: any) => ({ ...prev, error: '경계 조회 실패' }));
+        const errorMsg = data?.response?.error?.text || 'Feature not found for PNU';
+        addLog(`❌ Step 2 Failed: ${errorMsg}`);
+        setSelectedInfo((prev: any) => ({ ...prev, error: `경계 조회 실패: ${errorMsg}` }));
       }
     };
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // attrFilter 사용. pnu가 정확히 일치하는 필지 검색 (= 사용). crs=EPSG:4326 필수. geometry=true 추가.
-    // 수정: data=LP_PA_CB_ND_BU
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    // attrFilter 사용. pnu가 정확히 일치하는 필지 검색 (:=: 사용). crs=EPSG:4326 필수. geometry=true 추가.
+    // 수정: data=LP_PA_CBND_BUBUN
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     
     document.body.appendChild(script);
   };
