@@ -255,10 +255,21 @@ const App = () => {
   useEffect(() => {
     if (!map) return;
     const kakao = (window as any).kakao;
+    
+    if (!kakao || !kakao.maps) return;
+
+    // 카카오맵 지적편집도 상수: USE_DISTRICT
+    const cadastralType = kakao.maps.MapTypeId.USE_DISTRICT;
+
     try {
-      if (showCadastral) map.addOverlayMapTypeId(kakao.maps.MapTypeId.DISTRICT);
-      else map.removeOverlayMapTypeId(kakao.maps.MapTypeId.DISTRICT);
-    } catch (e) {}
+      if (showCadastral) {
+        map.addOverlayMapTypeId(cadastralType);
+      } else {
+        map.removeOverlayMapTypeId(cadastralType);
+      }
+    } catch (e) {
+      console.error("Failed to toggle cadastral layer:", e);
+    }
   }, [showCadastral, map]);
 
   return (
