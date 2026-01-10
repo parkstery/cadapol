@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Layers, Info, Layers as LayerIcon, Map as MapIcon, X, ChevronRight, Activity, MapPin, Copy, Search } from 'lucide-react';
+import { Layers, Info, Layers as LayerIcon, Map as MapIcon, X, ChevronRight, Activity, MapPin, Copy, Search, Terminal } from 'lucide-react';
 import proj4 from 'proj4'; // npm install proj4 @types/proj4
 
 /**
  * 환경 설정: VWorld API 키 및 도메인
- * 주의: VWorld API 키는 해당 도메[](https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
+ * 주의: VWorld API 키는 해당 도메인(https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
  */
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44'; 
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
@@ -18,14 +18,22 @@ const App = () => {
   const [selectedInfo, setSelectedInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
   
   // 지도 객체 관리를 위한 ref
   const markerRef = useRef<any>(null);
   const polygonRef = useRef<any>(null);
   const overlayRef = useRef<any>(null);
 
+  // 디버그 로그 추가 함수
+  const addLog = (message: string) => {
+    const time = new Date().toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLogs(prev => [`[${time}] ${message}`, ...prev]);
+    console.log(`[VWorld Debug] ${message}`);
+  };
+
   useEffect(() => {
-    console.log("App Initializing..."); // Cache Busting Log
+    addLog("App Initializing...");
     let retryCount = 0;
     const maxRetries = 50;
 
@@ -41,6 +49,7 @@ const App = () => {
             };
             const kakaoMap = new kakao.maps.Map(mapContainer.current, options);
             setMap(kakaoMap);
+            addLog("Kakao Map Loaded Successfully");
             
             // 지도 클릭 이벤트 등록
             // 중요: 여기서 kakaoMap 인스턴스를 핸들러에 전달하여 클로저 문제 해결
@@ -49,6 +58,7 @@ const App = () => {
             });
           } catch (e) {
             console.error("Map initialization failed:", e);
+            addLog(`Map Init Failed: ${e}`);
           }
         });
       } else if (retryCount < maxRetries) {
@@ -79,6 +89,10 @@ const App = () => {
     const kakao = (window as any).kakao;
     if (!currentMap || !kakao) return;
 
+    // 로그 초기화 및 시작
+    setLogs([]);
+    addLog(`🖱️ Click: ${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)}`);
+
     clearGraphics();
 
     // 1. 클릭 위치에 마커 표시
@@ -95,6 +109,8 @@ const App = () => {
         const mainAddr = roadAddr || jibunAddr;
         const subAddr = roadAddr ? jibunAddr : '';
         
+        addLog(`📍 Address: ${mainAddr}`);
+
         // 커스텀 오버레이 디자인 (말풍선 스타일)
         const content = `
           <div style="
@@ -150,6 +166,8 @@ const App = () => {
         });
 
         overlayRef.current = overlay;
+      } else {
+        addLog(`❌ Address Geocoding Failed`);
       }
     });
 
@@ -165,6 +183,7 @@ const App = () => {
     setLoading(true);
     setSidebarOpen(true);
     setSelectedInfo(null);
+    addLog(`🚀 Step 1: Searching PNU at (${lng.toFixed(5)}, ${lat.toFixed(5)})`);
 
     const callbackName = `vworld_step1_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     
@@ -173,12 +192,14 @@ const App = () => {
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      console.log('Step1 Response:', data); // 디버깅 로그 추가
+      addLog(`📡 Step 1 Response Status: ${data?.response?.status}`);
 
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         const pnu = feature.properties.pnu;
         
+        addLog(`✅ PNU Found: ${pnu}`);
+
         // 속성 정보 설정
         setSelectedInfo({
           pnu: pnu,
@@ -193,9 +214,11 @@ const App = () => {
         if (pnu) {
           fetchGeometryByPNUStep2(pnu, currentMap);
         } else {
+            addLog(`⚠️ Step 1 Warning: PNU is empty`);
             setLoading(false);
         }
       } else {
+        addLog(`❌ Step 1 Failed: No features found`);
         setLoading(false);
         setSelectedInfo({ error: '해당 위치의 지적 정보를 찾을 수 없습니다.' });
       }
@@ -204,9 +227,11 @@ const App = () => {
     const script = document.createElement('script');
     script.id = callbackName;
     // 1단계는 geomFilter=POINT 사용. geometry=true 추가
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    // 수정: data=LP_PA_CB_ND_BU (연속지적도 표준 레이어)
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     
     script.onerror = () => {
+      addLog(`❌ Step 1 Network/Script Error`);
       setLoading(false);
       setSelectedInfo({ error: '데이터 로드 실패 (네트워크/도메인)' });
       delete (window as any)[callbackName];
@@ -221,6 +246,7 @@ const App = () => {
    * Advisor Note: attrFilter=pnu:=:{pnu} 방식을 사용하면 EPSG:4326 좌표계가 더 정확하게 적용된 Geometry를 얻을 수 있습니다.
    */
   const fetchGeometryByPNUStep2 = (pnu: string, currentMap: any) => {
+    addLog(`🚀 Step 2: Fetching Geometry for PNU ${pnu}`);
     const callbackName = `vworld_step2_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     
     (window as any)[callbackName] = (data: any) => {
@@ -228,18 +254,21 @@ const App = () => {
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      console.log('Step2 Response:', data); // 디버깅 로그 추가
+      addLog(`📡 Step 2 Response Status: ${data?.response?.status}`);
 
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         
         if (feature.geometry) {
+          addLog(`✅ Geometry Received: ${feature.geometry.type}`);
           drawParcelPolygon(feature.geometry, currentMap);
         } else {
+           addLog(`⚠️ Step 2 Warning: Response OK but No Geometry`);
            console.warn("PNU query returned no geometry");
            setSelectedInfo((prev: any) => ({ ...prev, error: '경계 데이터가 없습니다.' }));
         }
       } else {
+        addLog(`❌ Step 2 Failed: Feature not found for PNU`);
         setSelectedInfo((prev: any) => ({ ...prev, error: '경계 조회 실패' }));
       }
     };
@@ -247,15 +276,20 @@ const App = () => {
     const script = document.createElement('script');
     script.id = callbackName;
     // attrFilter 사용. pnu가 정확히 일치하는 필지 검색 (= 사용). crs=EPSG:4326 필수. geometry=true 추가.
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    // 수정: data=LP_PA_CB_ND_BU
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CB_ND_BU&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     
     document.body.appendChild(script);
   };
 
   const drawParcelPolygon = (geometry: any, currentMap: any) => {
     const kakao = (window as any).kakao;
+    addLog(`🎨 Drawing Polygon...`);
     
-    if (!currentMap || !kakao || !geometry) return;
+    if (!currentMap || !kakao || !geometry) {
+        addLog(`❌ Draw Failed: Invalid map or geometry`);
+        return;
+    }
 
     let paths: any[] = [];
     
@@ -264,22 +298,38 @@ const App = () => {
       if (!coordinates || coordinates.length === 0) return [];
       
       const firstPoint = coordinates[0][0]; // [x/lng, y/lat]
+      // 좌표계 확인용 로그
+      addLog(`🔍 Coord Check: [${firstPoint[0]}, ${firstPoint[1]}]`);
+
+      // TM 좌표(EPSG:5179) 의심 구간: Longitude > 180 or Latitude > 90
       let isTM = firstPoint[0] > 180 || firstPoint[1] > 90;
 
       if (isTM) {
-        console.warn("Converting TM (EPSG:5179) to WGS84 (EPSG:4326)");
-        proj4.defs("EPSG:5179", "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs");
-        const proj = proj4("EPSG:5179", "EPSG:4326");
-        
-        // 모든 링 (outer + holes) 변환
-        return coordinates.map((ring: number[][]) => 
-          ring.map(coord => {
-            const [lon, lat] = proj.forward([coord[0], coord[1]]);
-            return new kakao.maps.LatLng(lat, lon);
-          })
-        );
+        addLog("⚠️ Detected TM (EPSG:5179). Converting to WGS84...");
+        try {
+            // Proj4 정의 추가
+            if (proj4) {
+                 proj4.defs("EPSG:5179", "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs");
+                 const proj = proj4("EPSG:5179", "EPSG:4326");
+                 
+                 // 모든 링 (outer + holes) 변환
+                 return coordinates.map((ring: number[][]) => 
+                   ring.map(coord => {
+                     const [lon, lat] = proj.forward([coord[0], coord[1]]);
+                     return new kakao.maps.LatLng(lat, lon);
+                   })
+                 );
+            } else {
+                addLog("❌ Proj4 library not found!");
+                return [];
+            }
+        } catch(e) {
+            addLog(`❌ Projection Error: ${e}`);
+            return [];
+        }
       } else {
         // WGS84: [lng, lat] -> LatLng(lat, lng), 모든 링 처리
+        addLog("✅ Detected WGS84. Parsing directly.");
         return coordinates.map((ring: number[][]) => 
           ring.map(coord => new kakao.maps.LatLng(coord[1], coord[0]))
         );
@@ -297,11 +347,13 @@ const App = () => {
       }
     } catch (e) {
       console.error("Geometry parsing error", e);
+      addLog(`❌ Geometry Parse Error: ${e}`);
       setSelectedInfo((prev: any) => ({ ...prev, error: '경계 파싱 오류' }));
       return;
     }
 
     if (paths.length > 0) {
+      addLog(`✨ Polygon Created with ${paths.length} paths`);
       const polygon = new kakao.maps.Polygon({
         path: paths, // holes 지원 (LatLng[][])
         strokeWeight: 3,
@@ -314,7 +366,7 @@ const App = () => {
       polygon.setMap(currentMap);
       polygonRef.current = polygon;
     } else {
-        // 좌표 변환 실패 등으로 path가 비어있을 경우 에러 업데이트
+        addLog(`❌ Polygon Path Empty after parsing`);
         setSelectedInfo((prev: any) => ({ ...prev, error: '경계 데이터를 지도 좌표로 변환하지 못했습니다.' }));
     }
   };
@@ -424,6 +476,24 @@ const App = () => {
               <p className="text-sm text-slate-400 leading-relaxed">지도상의 필지를 클릭하여<br/>지적 정보와 경계를 확인하세요.</p>
             </div>
           )}
+          
+          {/* Debug Logs Section */}
+          <div className="mt-6 border-t border-white/10 pt-4">
+             <div className="flex items-center gap-2 mb-2 text-slate-400">
+                <Terminal className="w-4 h-4" />
+                <h3 className="text-xs font-bold uppercase tracking-wider">Process Logs</h3>
+             </div>
+             <div className="bg-black/40 rounded-lg p-3 h-48 overflow-y-auto font-mono text-[10px] text-green-400 border border-white/5 shadow-inner">
+                {logs.length === 0 ? (
+                    <span className="text-slate-600 italic">Ready...</span>
+                ) : (
+                    logs.map((log, i) => (
+                        <div key={i} className="mb-1 break-all whitespace-pre-wrap">{log}</div>
+                    ))
+                )}
+             </div>
+          </div>
+
         </div>
         <div className="p-5 text-[10px] text-slate-500 text-center border-t border-white/10 bg-black/10 tracking-tight">
           &copy; Kakao Maps & VWorld GIS Data API
