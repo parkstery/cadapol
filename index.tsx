@@ -3,14 +3,45 @@ import { createRoot } from 'react-dom/client';
 import { Layers, Info, Layers as LayerIcon, Map as MapIcon, X, ChevronRight, Activity, MapPin, Copy, Search, Terminal } from 'lucide-react';
 import proj4 from 'proj4'; // npm install proj4 @types/proj4
 
-/**
- * 환경 설정: VWorld API 키 및 도메인
- * 주의: VWorld API 키는 해당 도메인(https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
+
+/*********
+ * 환경 변수 로드 헬퍼 함수
+ * Vite(import.meta.env), Next.js/CRA(process.env) 등 다양한 환경 지원
  */
-const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44'; 
+const getEnv = (baseKey: string) => {
+  const prefixes = ['VITE_', 'NEXT_PUBLIC_', 'REACT_APP_', ''];
+  
+  // 1. Vite 방식 (import.meta.env) 시도.
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      for (const prefix of prefixes) {
+        const key = prefix + baseKey;
+        // @ts-ignore
+        if (import.meta.env[key]) return import.meta.env[key];
+      }
+    }
+  } catch (e) {}
+
+  // 2. Process.env 방식 (Next.js, CRA, Node) 시도
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+       for (const prefix of prefixes) {
+        const key = prefix + baseKey;
+        if (process.env[key]) return process.env[key];
+      }
+    }
+  } catch (e) {}
+
+  return '';
+};
+
+// const VWORLD_KEY = getEnv('VWORLD_API_KEY');  //기존
+const VWORLD_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY || ''; // 변경
+// const KAKAO_API_KEY = getEnv('KAKAO_API_KEY'); // 기존
+const KAKAO_API_KEY = process.env.NEXT_PUBLIC_KAKAO_API_KEY;
+
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
-// Kakao API Key from Environment Variable
-const KAKAO_API_KEY = process.env.KAKAO_API_KEY;
 
 const App = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -37,6 +68,18 @@ const App = () => {
   useEffect(() => {
     addLog("App Initializing...");
     
+    // 환경변수 체크 및 상세 가이드
+    if (!VWORLD_KEY) {
+        addLog("⚠️ Warning: VWORLD_API_KEY is missing!");
+        addLog("ℹ️ Tip: Set 'VITE_VWORLD_API_KEY' in Vercel.");
+    }
+    if (!KAKAO_API_KEY) {
+        addLog("❌ Error: KAKAO_API_KEY is missing!");
+        addLog("ℹ️ Tip: Set 'VITE_KAKAO_API_KEY' in Vercel settings and Redeploy.");
+    } else {
+        addLog("✅ API Keys loaded successfully.");
+    }
+
     // 카카오맵 SDK 로드 및 초기화
     const loadKakaoMap = () => {
         const scriptId = 'kakao-map-sdk';
@@ -46,14 +89,12 @@ const App = () => {
             if ((window as any).kakao && (window as any).kakao.maps) {
                 initMapInstance();
             } else {
-                // 로드 대기 (재시도 로직 없이 SDK 로드 이벤트를 기다리거나 간단한 체크)
                 setTimeout(initMapInstance, 500); 
             }
             return;
         }
 
         if (!KAKAO_API_KEY) {
-            addLog("❌ Error: KAKAO_API_KEY environment variable is missing.");
             return;
         }
 
@@ -65,7 +106,7 @@ const App = () => {
             initMapInstance();
         };
         script.onerror = () => {
-            addLog("❌ Failed to load Kakao Maps SDK");
+            addLog("❌ Failed to load Kakao Maps SDK. Check allowed domain.");
         };
         document.head.appendChild(script);
     };
@@ -216,6 +257,13 @@ const App = () => {
     setSidebarOpen(true);
     setSelectedInfo(null);
     addLog(`🚀 Step 1: Searching PNU at (${lng.toFixed(5)}, ${lat.toFixed(5)})`);
+
+    if (!VWORLD_KEY) {
+      addLog("❌ Error: VWORLD_API_KEY is missing");
+      setLoading(false);
+      setSelectedInfo({ error: '시스템 오류: VWorld API 키가 설정되지 않았습니다. 관리자에게 문의하세요.' });
+      return;
+    }
 
     const callbackName = `vworld_step1_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     
