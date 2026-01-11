@@ -36,10 +36,9 @@ const getEnv = (baseKey: string) => {
   return '';
 };
 
-// const VWORLD_KEY = getEnv('VWORLD_API_KEY');  //기존
-const VWORLD_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY || ''; // 변경
-// const KAKAO_API_KEY = getEnv('KAKAO_API_KEY'); // 기존
-const KAKAO_API_KEY = process.env.NEXT_PUBLIC_KAKAO_API_KEY;
+// getEnv 함수를 사용하여 VITE_, NEXT_PUBLIC_, REACT_APP_ 중 설정된 값을 자동으로 찾습니다.
+const VWORLD_KEY = getEnv('VWORLD_API_KEY');
+const KAKAO_API_KEY = getEnv('KAKAO_API_KEY');
 
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
 
