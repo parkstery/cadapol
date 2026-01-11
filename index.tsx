@@ -181,9 +181,13 @@ const App = () => {
         const mainAddr = roadAddr || jibunAddr;
         const subAddr = roadAddr ? jibunAddr : '';
         
+        // 좌표값 추출 (7자리까지)
+        const lat = latlng.getLat().toFixed(7);
+        const lng = latlng.getLng().toFixed(7);
+        
         addLog(`📍 Address: ${mainAddr}`);
 
-        // 커스텀 오버레이 디자인 (말풍선 스타일)
+        // 커스텀 오버레이 디자인 (말풍선 스타일 + 좌표정보)
         const content = `
           <div style="
             position: relative;
@@ -194,8 +198,8 @@ const App = () => {
             border: 1px solid rgba(0,0,0,0.1);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             font-family: 'Pretendard', sans-serif;
-            min-width: 200px;
-            max-width: 260px;
+            min-width: 220px;
+            max-width: 280px;
             transform: translateY(-40px);
             animation: fadeIn 0.3s ease-out;
           ">
@@ -208,6 +212,22 @@ const App = () => {
             </div>
             ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
             
+            <!-- 좌표 정보 추가 -->
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b; line-height: 1.6; font-variant-numeric: tabular-nums;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600; color:#94a3b8;">X (Lon)</span> 
+                <span style="font-weight:700; color:#334155; font-family: monospace;">${lng}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600; color:#94a3b8;">Y (Lat)</span> 
+                <span style="font-weight:700; color:#334155; font-family: monospace;">${lat}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600; color:#94a3b8;">Z (Alt)</span> 
+                <span style="font-weight:700; color:#94a3b8; font-family: monospace;">0</span>
+              </div>
+            </div>
+
             <!-- 말풍선 꼬리 -->
             <div style="
               position: absolute;
