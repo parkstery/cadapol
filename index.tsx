@@ -9,6 +9,8 @@ import proj4 from 'proj4'; // npm install proj4 @types/proj4
  */
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44'; 
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
+// Kakao API Key from Environment Variable
+const KAKAO_API_KEY = process.env.KAKAO_API_KEY;
 
 const App = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -34,10 +36,41 @@ const App = () => {
 
   useEffect(() => {
     addLog("App Initializing...");
-    let retryCount = 0;
-    const maxRetries = 50;
+    
+    // 카카오맵 SDK 로드 및 초기화
+    const loadKakaoMap = () => {
+        const scriptId = 'kakao-map-sdk';
+        
+        // 이미 스크립트가 존재하는지 확인
+        if (document.getElementById(scriptId)) {
+            if ((window as any).kakao && (window as any).kakao.maps) {
+                initMapInstance();
+            } else {
+                // 로드 대기 (재시도 로직 없이 SDK 로드 이벤트를 기다리거나 간단한 체크)
+                setTimeout(initMapInstance, 500); 
+            }
+            return;
+        }
 
-    const initMap = () => {
+        if (!KAKAO_API_KEY) {
+            addLog("❌ Error: KAKAO_API_KEY environment variable is missing.");
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&libraries=services,clusterer,drawing&autoload=false`;
+        script.async = true;
+        script.onload = () => {
+            initMapInstance();
+        };
+        script.onerror = () => {
+            addLog("❌ Failed to load Kakao Maps SDK");
+        };
+        document.head.appendChild(script);
+    };
+
+    const initMapInstance = () => {
       const kakao = (window as any).kakao;
       if (kakao && kakao.maps) {
         kakao.maps.load(() => {
@@ -52,7 +85,6 @@ const App = () => {
             addLog("Kakao Map Loaded Successfully");
             
             // 지도 클릭 이벤트 등록
-            // 중요: 여기서 kakaoMap 인스턴스를 핸들러에 전달하여 클로저 문제 해결
             kakao.maps.event.addListener(kakaoMap, 'click', (mouseEvent: any) => {
               handleMapClick(mouseEvent.latLng, kakaoMap);
             });
@@ -61,12 +93,12 @@ const App = () => {
             addLog(`Map Init Failed: ${e}`);
           }
         });
-      } else if (retryCount < maxRetries) {
-        retryCount++;
-        setTimeout(initMap, 100);
+      } else {
+        addLog("⚠️ Kakao object not ready yet.");
       }
     };
-    initMap();
+
+    loadKakaoMap();
   }, []);
 
   // 기존에 그려진 마커, 폴리곤, 오버레이 제거
