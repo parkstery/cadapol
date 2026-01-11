@@ -7,8 +7,7 @@ import proj4 from 'proj4'; // npm install proj4 @types/proj4
  * 환경 설정: VWorld API 키 및 도메인
  * 주의: VWorld API 키는 해당 도메인(https://cadapol.vercel.app/)에 등록되어 있어야 합니다.
  */
-// VWorld API Key from Environment Variable
-const VWORLD_KEY = process.env.VWORLD_API_KEY;
+const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44'; 
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
 // Kakao API Key from Environment Variable
 const KAKAO_API_KEY = process.env.KAKAO_API_KEY;
@@ -38,10 +37,6 @@ const App = () => {
   useEffect(() => {
     addLog("App Initializing...");
     
-    // 환경변수 체크
-    if (!VWORLD_KEY) addLog("⚠️ Warning: VWORLD_API_KEY is missing!");
-    if (!KAKAO_API_KEY) addLog("❌ Error: KAKAO_API_KEY is missing!");
-
     // 카카오맵 SDK 로드 및 초기화
     const loadKakaoMap = () => {
         const scriptId = 'kakao-map-sdk';
@@ -58,6 +53,7 @@ const App = () => {
         }
 
         if (!KAKAO_API_KEY) {
+            addLog("❌ Error: KAKAO_API_KEY environment variable is missing.");
             return;
         }
 
@@ -220,13 +216,6 @@ const App = () => {
     setSidebarOpen(true);
     setSelectedInfo(null);
     addLog(`🚀 Step 1: Searching PNU at (${lng.toFixed(5)}, ${lat.toFixed(5)})`);
-
-    if (!VWORLD_KEY) {
-      addLog("❌ Error: VWORLD_API_KEY is missing");
-      setLoading(false);
-      setSelectedInfo({ error: '시스템 오류: VWorld API 키가 설정되지 않았습니다.' });
-      return;
-    }
 
     const callbackName = `vworld_step1_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     
