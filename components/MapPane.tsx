@@ -8,6 +8,15 @@ import { MapProvider } from './map-providers/BaseMapProvider';
 import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
+// 🆕 레이어 시스템
+import { LayerManager } from './layers/LayerManager';
+import { CadastralLayer } from './layers/CadastralLayer';
+import { LayerType } from '../types';
+import { createDefaultLayerConfig } from './layers/BaseLayer';
+// 🆕 레이어 시스템
+import { LayerManager } from './layers/LayerManager';
+import { CadastralLayer } from './layers/CadastralLayer';
+import { LayerType, createDefaultLayerConfig } from './layers/BaseLayer';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -37,6 +46,9 @@ const MapPane: React.FC<MapPaneProps> = ({
   // 🆕 새 Provider 시스템 (점진적 마이그레이션)
   const mapProviderRef = useRef<MapProvider | null>(null);
   const useNewProvider = config.type === 'google' || config.type === 'kakao' || config.type === 'naver'; // 모든 맵 새 Provider 사용 (점진적 마이그레이션)
+  
+  // 🆕 레이어 관리자
+  const layerManagerRef = useRef<LayerManager | null>(null);
   
   // -- Sync Control Refs --
   const isDragging = useRef(false); 
@@ -143,6 +155,23 @@ const MapPane: React.FC<MapPaneProps> = ({
               if (provider instanceof GoogleMapProvider) {
                 googlePanoInstanceRef.current = provider.getPanoramaInstance();
                 googleCoverageLayerRef.current = provider.getCoverageLayer();
+              }
+              
+              // 🆕 레이어 관리자 초기화
+              if (!layerManagerRef.current) {
+                layerManagerRef.current = new LayerManager();
+              }
+              layerManagerRef.current.setMapProvider(provider);
+              
+              // 🆕 지적 레이어 추가 (Kakao Maps에서만)
+              if (config.type === 'kakao') {
+                const cadastralLayer = new CadastralLayer();
+                const cadastralConfig = createDefaultLayerConfig(
+                  LayerType.CADASTRAL,
+                  '지적 경계',
+                  { visible: false } // 기본적으로 숨김
+                );
+                layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
               }
               
               setSdkLoaded(true);
@@ -3016,6 +3045,19 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   const toggleKakaoCadastral = useCallback(() => {
     if (config.type !== 'kakao' || !mapRef.current) return;
+    
+    // 🆕 새 레이어 시스템 사용
+    if (layerManagerRef.current) {
+      const cadastralLayers = layerManagerRef.current.getLayersByType(LayerType.CADASTRAL);
+      if (cadastralLayers.length > 0) {
+        const cadastralLayer = cadastralLayers[0];
+        const layerId = cadastralLayer.getId();
+        const isVisible = layerManagerRef.current.toggleLayer(layerId);
+        return;
+      }
+    }
+    
+    // 기존 방식 (폴백)
     const isCadastral = kakaoGisRef.current.roadviewLayer;
     if (isCadastral) mapRef.current.removeOverlayMapTypeId(window.kakao.maps.MapTypeId.USE_DISTRICT);
     else mapRef.current.addOverlayMapTypeId(window.kakao.maps.MapTypeId.USE_DISTRICT);
