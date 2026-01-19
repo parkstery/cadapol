@@ -223,15 +223,11 @@ const MapPane: React.FC<MapPaneProps> = ({
               setSdkLoaded(true);
             }).catch((error) => {
               console.error('GoogleMapProvider initialization failed:', error);
-              // 실패 시 기존 방식으로 폴백
-              initGoogleMap();
-              setSdkLoaded(true);
+              setSdkLoaded(false);
             });
           } catch (error) {
             console.error('GoogleMapProvider creation failed:', error);
-            // 실패 시 기존 방식으로 폴백
-            initGoogleMap();
-            setSdkLoaded(true);
+            setSdkLoaded(false);
           }
         }
         return true;
@@ -303,9 +299,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                   setSdkLoaded(true);
                 } catch (error) {
                   console.error('KakaoMapProvider initialization failed:', error);
-                  // 실패 시 기존 방식으로 폴백
-                  initKakaoMap();
-                  setSdkLoaded(true);
+                  setSdkLoaded(false);
                 }
               });
             }
@@ -351,15 +345,11 @@ const MapPane: React.FC<MapPaneProps> = ({
               setSdkLoaded(true);
             }).catch((error) => {
               console.error('NaverMapProvider initialization failed:', error);
-              // 실패 시 기존 방식으로 폴백
-              initNaverMap();
-              setSdkLoaded(true);
+              setSdkLoaded(false);
             });
           } catch (error) {
             console.error('NaverMapProvider creation failed:', error);
-            // 실패 시 기존 방식으로 폴백
-            initNaverMap();
-            setSdkLoaded(true);
+            setSdkLoaded(false);
           }
         }
         return true;
@@ -588,124 +578,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
 
   // 2. Initialize Maps
-  const initGoogleMap = () => {
-    if (!containerRef.current || !googlePanoRef.current) return;
-    
-    const panorama = new window.google.maps.StreetViewPanorama(googlePanoRef.current, {
-       visible: false,
-       enableCloseButton: false,
-    });
-    googlePanoInstanceRef.current = panorama;
-    googleCoverageLayerRef.current = new window.google.maps.StreetViewCoverageLayer();
-
-    mapRef.current = new window.google.maps.Map(containerRef.current, {
-      center: { lat: globalState.lat, lng: globalState.lng },
-      zoom: globalState.zoom,
-      mapTypeId: config.isSatellite ? 'satellite' : 'roadmap',
-      disableDefaultUI: false,
-      zoomControl: true,
-      streetViewControl: true,
-      streetViewControlOptions: {
-        position: window.google.maps.ControlPosition.TOP_RIGHT
-      },
-      fullscreenControl: false,
-      streetView: panorama,
-      gestureHandling: 'greedy'
-    });
-    
-    setupMapListeners('google');
-
-    panorama.addListener('visible_changed', () => {
-      const isVisible = panorama.getVisible();
-      setIsStreetViewActive(isVisible);
-      if (isVisible) {
-        googleCoverageLayerRef.current.setMap(mapRef.current);
-        // 거리뷰 시작 시 초기 위치를 미니맵 중앙으로 이동
-        const pos = panorama.getPosition();
-        if (pos) {
-          const lat = pos.lat();
-          const lng = pos.lng();
-          mapRef.current.setCenter({ lat, lng });
-          onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
-          
-          // 거리뷰 상태 업데이트 (동기화를 위해)
-          onStreetViewChange({ lat, lng, active: true });
-        }
-      } else {
-        googleCoverageLayerRef.current.setMap(null);
-        // 거리뷰 닫을 때 상태 업데이트
-        onStreetViewChange(null);
-      }
-    });
-
-    panorama.addListener('position_changed', () => {
-      if (panorama.getVisible()) {
-        const pos = panorama.getPosition();
-        if (pos) {
-          const lat = pos.lat();
-          const lng = pos.lng();
-          isDragging.current = true; 
-          
-          // 거리뷰 상태 업데이트 (동기화를 위해)
-          onStreetViewChange({ lat, lng, active: true });
-          
-          // 미니맵 중앙으로 이동
-          mapRef.current.setCenter({ lat, lng });
-          onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
-          
-          setTimeout(() => isDragging.current = false, 200);
-        }
-      }
-    });
-  };
-
-  const initKakaoMap = () => {
-    if (!containerRef.current) {
-      console.error('Kakao Map: containerRef가 없습니다');
-      return;
-    }
-    
-    try {
-      if (!window.kakao || !window.kakao.maps) {
-        console.error('Kakao Maps SDK가 로드되지 않았습니다');
-        return;
-      }
-
-      const options = {
-        center: new window.kakao.maps.LatLng(globalState.lat, globalState.lng),
-        level: zoomToKakao(globalState.zoom)
-      };
-      mapRef.current = new window.kakao.maps.Map(containerRef.current, options);
-      
-      if (config.isSatellite) {
-        mapRef.current.setMapTypeId(window.kakao.maps.MapTypeId.HYBRID);
-      }
-      
-      if (window.kakao.maps.services) {
-        kakaoGisRef.current.geocoder = new window.kakao.maps.services.Geocoder();
-      }
-      kakaoGisRef.current.rvClient = new window.kakao.maps.RoadviewClient();
-      
-      setupMapListeners('kakao');
-      setupKakaoAddressClick();
-      
-      console.log('Kakao Map 초기화 완료');
-    } catch (error) {
-      console.error('Kakao Map 초기화 오류:', error);
-    }
-  };
-
-  const initNaverMap = () => {
-    if (!containerRef.current) return;
-    mapRef.current = new window.naver.maps.Map(containerRef.current, {
-      center: new window.naver.maps.LatLng(globalState.lat, globalState.lng),
-      zoom: globalState.zoom,
-      mapTypeId: config.isSatellite ? window.naver.maps.MapTypeId.SATELLITE : window.naver.maps.MapTypeId.NORMAL
-    });
-    
-    naverStreetLayerRef.current = new window.naver.maps.StreetLayer();
-    setupMapListeners('naver');
-  };
+  // 🆕 기존 init 함수들은 Provider 시스템으로 완전 전환되어 제거됨
+  // 모든 맵 초기화는 MapProviderFactory를 통해 처리됨
 
   // 카카오맵 방향 표시 폴리곤 생성 (부채 모양)
   const createKakaoDirectionPolygon = useCallback((centerPos: any, angle: number, map: any) => {
