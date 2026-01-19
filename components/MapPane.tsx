@@ -1320,25 +1320,23 @@ const MapPane: React.FC<MapPaneProps> = ({
           const polygonHeight = maxLat - minLat;
           const polygonWidth = maxLng - minLng;
           
-          // infowindow 크기 추정 (픽셀 단위를 위도/경도로 변환하기 어려우므로 폴리곤 크기의 일정 비율로 추정)
-          // 일반적으로 infowindow는 약 200-300px 정도이므로, 지도 줌 레벨에 따라 위도/경도로 변환
-          // 간단하게 폴리곤 크기의 20% 정도로 추정
-          const estimatedInfoWindowHeight = polygonHeight * 0.2;
-          const estimatedInfoWindowWidth = polygonWidth * 0.2;
+          // infowindow 크기 추정 (더 작게 추정하여 가까운 위치에 배치)
+          const estimatedInfoWindowHeight = polygonHeight * 0.1;
+          const estimatedInfoWindowWidth = polygonWidth * 0.1;
           
-          // 폴리곤 경계에서의 여유 공간 (폴리곤 크기의 10%)
-          const margin = Math.max(polygonHeight, polygonWidth) * 0.1;
+          // 폴리곤 경계에서의 여유 공간 (폴리곤 크기의 2%로 줄여서 더 가까이 배치)
+          const margin = Math.max(polygonHeight, polygonWidth) * 0.02;
           
-          // 4방향 후보 위치 계산 (위, 아래, 왼쪽, 오른쪽)
+          // 4방향 후보 위치 계산 (위, 아래, 왼쪽, 오른쪽) - 더 가까운 위치에 배치
           const candidates = [
-            // 위쪽: 폴리곤 위쪽 경계 + 여유 공간 + infowindow 높이
-            { lat: maxLat + margin + estimatedInfoWindowHeight, lng: centerLng, distance: maxLat - centerLat + margin + estimatedInfoWindowHeight },
-            // 아래쪽: 폴리곤 아래쪽 경계 - 여유 공간 - infowindow 높이
-            { lat: minLat - margin - estimatedInfoWindowHeight, lng: centerLng, distance: centerLat - minLat + margin + estimatedInfoWindowHeight },
-            // 오른쪽: 폴리곤 오른쪽 경계 + 여유 공간 + infowindow 너비
-            { lat: centerLat, lng: maxLng + margin + estimatedInfoWindowWidth, distance: maxLng - centerLng + margin + estimatedInfoWindowWidth },
-            // 왼쪽: 폴리곤 왼쪽 경계 - 여유 공간 - infowindow 너비
-            { lat: centerLat, lng: minLng - margin - estimatedInfoWindowWidth, distance: centerLng - minLng + margin + estimatedInfoWindowWidth }
+            // 위쪽: 폴리곤 위쪽 경계 + 여유 공간
+            { lat: maxLat + margin, lng: centerLng, distance: maxLat - centerLat + margin },
+            // 아래쪽: 폴리곤 아래쪽 경계 - 여유 공간
+            { lat: minLat - margin, lng: centerLng, distance: centerLat - minLat + margin },
+            // 오른쪽: 폴리곤 오른쪽 경계 + 여유 공간
+            { lat: centerLat, lng: maxLng + margin, distance: maxLng - centerLng + margin },
+            // 왼쪽: 폴리곤 왼쪽 경계 - 여유 공간
+            { lat: centerLat, lng: minLng - margin, distance: centerLng - minLng + margin }
           ];
           
           // 가장 가까운 위치 선택 (거리 기준)
@@ -1352,23 +1350,23 @@ const MapPane: React.FC<MapPaneProps> = ({
           // 선택된 위치가 폴리곤 경계 박스와 겹치지 않는지 확인
           // infowindow가 폴리곤 경계 박스 밖에 있는지 확인 (여유 공간 포함)
           const isOutside = 
-            (bestPosition.lat < minLat - margin - estimatedInfoWindowHeight || bestPosition.lat > maxLat + margin + estimatedInfoWindowHeight) ||
-            (bestPosition.lng < minLng - margin - estimatedInfoWindowWidth || bestPosition.lng > maxLng + margin + estimatedInfoWindowWidth);
+            (bestPosition.lat < minLat - margin || bestPosition.lat > maxLat + margin) ||
+            (bestPosition.lng < minLng - margin || bestPosition.lng > maxLng + margin);
           
           // 폴리곤 경계 박스 밖에 있지 않으면 가장 가까운 방향으로 더 멀리 이동
           if (!isOutside) {
             if (bestPosition.lat > centerLat) {
               // 위쪽 방향
-              bestPosition.lat = maxLat + margin + estimatedInfoWindowHeight;
+              bestPosition.lat = maxLat + margin;
             } else if (bestPosition.lat < centerLat) {
               // 아래쪽 방향
-              bestPosition.lat = minLat - margin - estimatedInfoWindowHeight;
+              bestPosition.lat = minLat - margin;
             } else if (bestPosition.lng > centerLng) {
               // 오른쪽 방향
-              bestPosition.lng = maxLng + margin + estimatedInfoWindowWidth;
+              bestPosition.lng = maxLng + margin;
             } else {
               // 왼쪽 방향
-              bestPosition.lng = minLng - margin - estimatedInfoWindowWidth;
+              bestPosition.lng = minLng - margin;
             }
           }
           
@@ -2235,23 +2233,17 @@ const MapPane: React.FC<MapPaneProps> = ({
                     floatingOverlay = null;
                 }
                 
-                // 전체 거리 표시 및 버튼들
+                // 전체 거리 표시 및 텍스트 닫기 버튼
                 const textCloseBtn = document.createElement('button');
                 textCloseBtn.innerHTML = '✕';
                 textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
                 textCloseBtn.title = '텍스트 박스 닫기';
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '🗑️';
-                deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
-                deleteBtn.title = '측정 객체 삭제';
                 
                 const content = document.createElement('div');
                 content.style.position = 'relative';
                 content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
                 content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
                 content.appendChild(textCloseBtn);
-                content.appendChild(deleteBtn);
                 
                 // content div의 클릭 이벤트 전파 방지 (버튼이 아닌 부분 클릭 시 지도 클릭 방지)
                 content.addEventListener('mousedown', (e: any) => {
@@ -2272,6 +2264,33 @@ const MapPane: React.FC<MapPaneProps> = ({
                     zIndex: 100
                 });
                 kakaoDrawingRef.current.overlays.push(totalOverlay);
+                
+                // 도형 삭제 버튼을 마지막 포인트 가까이 별도 오버레이로 배치
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.style.cssText = 'width:24px; height:24px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:14px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                deleteBtn.title = '측정 객체 삭제';
+                
+                // 마지막 포인트에서 약간 오프셋된 위치에 배치 (텍스트 박스와 중첩 방지)
+                // 텍스트 박스가 lastPos에 있으므로, 약간 위쪽으로 이동
+                const deleteBtnPos = new window.kakao.maps.LatLng(
+                    lastPos.getLat() + 0.00005, // 약간 위로 이동
+                    lastPos.getLng()
+                );
+                
+                const deleteBtnContainer = document.createElement('div');
+                deleteBtnContainer.style.pointerEvents = 'none';
+                deleteBtnContainer.appendChild(deleteBtn);
+                
+                const deleteBtnOverlay = new window.kakao.maps.CustomOverlay({
+                    map: map,
+                    position: deleteBtnPos,
+                    content: deleteBtnContainer,
+                    yAnchor: 0.5,
+                    xAnchor: 0.5,
+                    zIndex: 101
+                });
+                kakaoDrawingRef.current.overlays.push(deleteBtnOverlay);
                 
                 // 참조 저장 (currentLine이 null로 설정되기 전에 저장)
                 const savedCurrentLine = currentLine;
@@ -2333,6 +2352,14 @@ const MapPane: React.FC<MapPaneProps> = ({
                         const totalOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(totalOverlay);
                         if (totalOverlayIndex > -1) {
                             kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
+                        }
+                    }
+                    // 도형 삭제 버튼 오버레이도 삭제
+                    if (deleteBtnOverlay) {
+                        deleteBtnOverlay.setMap(null);
+                        const deleteBtnOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(deleteBtnOverlay);
+                        if (deleteBtnOverlayIndex > -1) {
+                            kakaoDrawingRef.current.overlays.splice(deleteBtnOverlayIndex, 1);
                         }
                     }
                 };
@@ -2507,23 +2534,17 @@ const MapPane: React.FC<MapPaneProps> = ({
                         floatingOverlay = null;
                     }
                     
-                    // 면적 표시 및 버튼들
+                    // 면적 표시 및 텍스트 닫기 버튼
                     const textCloseBtn = document.createElement('button');
                     textCloseBtn.innerHTML = '✕';
                     textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
                     textCloseBtn.title = '텍스트 박스 닫기';
-                    
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.innerHTML = '🗑️';
-                    deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
-                    deleteBtn.title = '측정 객체 삭제';
                     
                     const content = document.createElement('div');
                     content.style.position = 'relative';
                     content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
                     content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
                     content.appendChild(textCloseBtn);
-                    content.appendChild(deleteBtn);
                     
                     // content div의 클릭 이벤트 전파 방지 (버튼이 아닌 부분 클릭 시 지도 클릭 방지)
                     content.addEventListener('mousedown', (e: any) => {
@@ -2544,6 +2565,33 @@ const MapPane: React.FC<MapPaneProps> = ({
                         zIndex: 100
                     });
                     kakaoDrawingRef.current.overlays.push(areaOverlay);
+                    
+                    // 도형 삭제 버튼을 마지막 포인트 가까이 별도 오버레이로 배치
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.innerHTML = '🗑️';
+                    deleteBtn.style.cssText = 'width:24px; height:24px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:14px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                    deleteBtn.title = '측정 객체 삭제';
+                    
+                    // 마지막 포인트에서 약간 오프셋된 위치에 배치 (텍스트 박스와 중첩 방지)
+                    // 텍스트 박스가 lastPos에 있으므로, 약간 위쪽으로 이동
+                    const deleteBtnPos = new window.kakao.maps.LatLng(
+                        lastPos.getLat() + 0.00005, // 약간 위로 이동
+                        lastPos.getLng()
+                    );
+                    
+                    const deleteBtnContainer = document.createElement('div');
+                    deleteBtnContainer.style.pointerEvents = 'none';
+                    deleteBtnContainer.appendChild(deleteBtn);
+                    
+                    const deleteBtnOverlay = new window.kakao.maps.CustomOverlay({
+                        map: map,
+                        position: deleteBtnPos,
+                        content: deleteBtnContainer,
+                        yAnchor: 0.5,
+                        xAnchor: 0.5,
+                        zIndex: 101
+                    });
+                    kakaoDrawingRef.current.overlays.push(deleteBtnOverlay);
                     
                     // 참조 저장 (currentPoly가 null로 설정되기 전에 저장)
                     const savedCurrentPoly = currentPoly;
@@ -2588,6 +2636,14 @@ const MapPane: React.FC<MapPaneProps> = ({
                             const areaOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(areaOverlay);
                             if (areaOverlayIndex > -1) {
                                 kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
+                            }
+                        }
+                        // 도형 삭제 버튼 오버레이도 삭제
+                        if (deleteBtnOverlay) {
+                            deleteBtnOverlay.setMap(null);
+                            const deleteBtnOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(deleteBtnOverlay);
+                            if (deleteBtnOverlayIndex > -1) {
+                                kakaoDrawingRef.current.overlays.splice(deleteBtnOverlayIndex, 1);
                             }
                         }
                     };
