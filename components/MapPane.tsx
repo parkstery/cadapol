@@ -1782,14 +1782,9 @@ const MapPane: React.FC<MapPaneProps> = ({
   }, [globalState.lat, globalState.lng, globalState.zoom, config.type, sdkLoaded]);
 
   useEffect(() => {
-    // 🆕 새 Provider 시스템 사용 시
-    if (useNewProvider && mapProviderRef.current) {
-      mapProviderRef.current.setSatelliteMode(config.isSatellite);
-      return;
-    }
+    if (!mapRef.current || !sdkLoaded) return;
     
-    // 기존 방식
-    if (!mapRef.current) return;
+    // 기존 방식 사용 (Provider 시스템은 맵 타입 변경 시 문제가 있으므로 기존 방식 사용)
     try {
       if (config.type === 'google') {
         mapRef.current.setMapTypeId(config.isSatellite ? 'satellite' : 'roadmap');
@@ -1798,7 +1793,9 @@ const MapPane: React.FC<MapPaneProps> = ({
       } else if (config.type === 'naver') {
         mapRef.current.setMapTypeId(config.isSatellite ? window.naver.maps.MapTypeId.SATELLITE : window.naver.maps.MapTypeId.NORMAL);
       }
-    } catch(e) {}
+    } catch(e) {
+      console.error('Map type change error:', e);
+    }
   }, [config.isSatellite, config.type, sdkLoaded]);
 
   useEffect(() => {
