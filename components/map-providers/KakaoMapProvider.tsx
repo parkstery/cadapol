@@ -335,10 +335,14 @@ export class KakaoMapProvider implements MapProvider {
   }
   
   cleanup(): void {
-    // 리스너 제거
+    // 리스너 제거 (안전하게 처리)
     this.listeners.forEach(({ event, handler }) => {
-      if (this.map) {
-        window.kakao.maps.event.removeListener(this.map, event, handler);
+      try {
+        if (this.map && handler && typeof handler === 'function') {
+          window.kakao.maps.event.removeListener(this.map, event, handler);
+        }
+      } catch (error) {
+        // 이미 제거된 리스너이거나 유효하지 않은 리스너인 경우 무시
       }
     });
     this.listeners = [];

@@ -2339,7 +2339,15 @@ const MapPane: React.FC<MapPaneProps> = ({
     if (config.type !== 'kakao' || !mapRef.current) return;
     
     // Clear listeners from previous mode
-    kakaoDrawingRef.current.listeners.forEach(fn => fn());
+    kakaoDrawingRef.current.listeners.forEach(fn => {
+      try {
+        if (typeof fn === 'function') {
+          fn();
+        }
+      } catch (error) {
+        // 이미 제거된 리스너인 경우 무시
+      }
+    });
     kakaoDrawingRef.current.listeners = [];
     
     // Clear previous overlays
@@ -3170,7 +3178,15 @@ const MapPane: React.FC<MapPaneProps> = ({
       kakaoDrawingRef.current.polylines.forEach(p => p.setMap(null));
       kakaoDrawingRef.current.polygons.forEach(p => p.setMap(null));
       kakaoDrawingRef.current.overlays.forEach(o => o.setMap(null));
-      kakaoDrawingRef.current.listeners.forEach(fn => fn());
+      kakaoDrawingRef.current.listeners.forEach(fn => {
+        try {
+          if (typeof fn === 'function') {
+            fn();
+          }
+        } catch (error) {
+          // 이미 제거된 리스너인 경우 무시
+        }
+      });
       kakaoDrawingRef.current = { polylines: [], polygons: [], overlays: [], listeners: [] };
   };
 
