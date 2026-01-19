@@ -1789,6 +1789,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                 });
                 kakaoDrawingRef.current.overlays.push(totalOverlay);
                 
+                // 참조 저장 (currentLine이 null로 설정되기 전에 저장)
+                const savedCurrentLine = currentLine;
+                const savedFixedOverlays = [...fixedOverlays];
+                
                 // 텍스트 박스 닫기 버튼 (오버레이만 삭제)
                 textCloseBtn.onclick = () => {
                     if (totalOverlay) {
@@ -1802,17 +1806,17 @@ const MapPane: React.FC<MapPaneProps> = ({
                 
                 // 측정 객체 삭제 버튼 (폴리라인 및 모든 관련 요소 삭제)
                 deleteBtn.onclick = () => {
-                    // 폴리라인 삭제
-                    if (currentLine) {
-                        currentLine.setMap(null);
+                    // 폴리라인 삭제 (저장된 참조 사용)
+                    if (savedCurrentLine) {
+                        savedCurrentLine.setMap(null);
                         // polylines 배열에서도 제거
-                        const index = kakaoDrawingRef.current.polylines.indexOf(currentLine);
+                        const index = kakaoDrawingRef.current.polylines.indexOf(savedCurrentLine);
                         if (index > -1) {
                             kakaoDrawingRef.current.polylines.splice(index, 1);
                         }
                     }
-                    // 모든 오버레이 삭제
-                    fixedOverlays.forEach(o => {
+                    // 모든 오버레이 삭제 (저장된 참조 사용)
+                    savedFixedOverlays.forEach(o => {
                         o.setMap(null);
                         const overlayIndex = kakaoDrawingRef.current.overlays.indexOf(o);
                         if (overlayIndex > -1) {
@@ -1825,20 +1829,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                         const totalOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(totalOverlay);
                         if (totalOverlayIndex > -1) {
                             kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
-                        }
-                    }
-                    if (floatingOverlay) {
-                        floatingOverlay.setMap(null);
-                        const floatingIndex = kakaoDrawingRef.current.overlays.indexOf(floatingOverlay);
-                        if (floatingIndex > -1) {
-                            kakaoDrawingRef.current.overlays.splice(floatingIndex, 1);
-                        }
-                    }
-                    if (floatingLine) {
-                        floatingLine.setMap(null);
-                        const floatingLineIndex = kakaoDrawingRef.current.polylines.indexOf(floatingLine);
-                        if (floatingLineIndex > -1) {
-                            kakaoDrawingRef.current.polylines.splice(floatingLineIndex, 1);
                         }
                     }
                 };
@@ -2029,6 +2019,9 @@ const MapPane: React.FC<MapPaneProps> = ({
                     });
                     kakaoDrawingRef.current.overlays.push(areaOverlay);
                     
+                    // 참조 저장 (currentPoly가 null로 설정되기 전에 저장)
+                    const savedCurrentPoly = currentPoly;
+                    
                     // 텍스트 박스 닫기 버튼 (오버레이만 삭제)
                     textCloseBtn.onclick = () => {
                         if (areaOverlay) {
@@ -2042,35 +2035,13 @@ const MapPane: React.FC<MapPaneProps> = ({
                     
                     // 측정 객체 삭제 버튼 (폴리곤 및 모든 관련 요소 삭제)
                     deleteBtn.onclick = () => {
-                        // 폴리곤 삭제
-                        if (currentPoly) {
-                            currentPoly.setMap(null);
+                        // 폴리곤 삭제 (저장된 참조 사용)
+                        if (savedCurrentPoly) {
+                            savedCurrentPoly.setMap(null);
                             // polygons 배열에서도 제거
-                            const index = kakaoDrawingRef.current.polygons.indexOf(currentPoly);
+                            const index = kakaoDrawingRef.current.polygons.indexOf(savedCurrentPoly);
                             if (index > -1) {
                                 kakaoDrawingRef.current.polygons.splice(index, 1);
-                            }
-                        }
-                        // 플로우팅 요소들 삭제
-                        if (floatingLine) {
-                            floatingLine.setMap(null);
-                            const floatingLineIndex = kakaoDrawingRef.current.polylines.indexOf(floatingLine);
-                            if (floatingLineIndex > -1) {
-                                kakaoDrawingRef.current.polylines.splice(floatingLineIndex, 1);
-                            }
-                        }
-                        if (floatingPoly) {
-                            floatingPoly.setMap(null);
-                            const floatingPolyIndex = kakaoDrawingRef.current.polygons.indexOf(floatingPoly);
-                            if (floatingPolyIndex > -1) {
-                                kakaoDrawingRef.current.polygons.splice(floatingPolyIndex, 1);
-                            }
-                        }
-                        if (floatingOverlay) {
-                            floatingOverlay.setMap(null);
-                            const floatingIndex = kakaoDrawingRef.current.overlays.indexOf(floatingOverlay);
-                            if (floatingIndex > -1) {
-                                kakaoDrawingRef.current.overlays.splice(floatingIndex, 1);
                             }
                         }
                         // 면적 오버레이도 삭제
