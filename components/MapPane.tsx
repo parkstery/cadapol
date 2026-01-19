@@ -1774,9 +1774,14 @@ const MapPane: React.FC<MapPaneProps> = ({
                 deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
                 deleteBtn.title = '측정 객체 삭제';
                 
+                const textLabel = document.createElement('div');
+                textLabel.className = 'measure-label';
+                textLabel.style.cssText = 'background:white; border:2px solid #FF3333; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#FF3333;';
+                textLabel.textContent = `총 거리: ${totalLength}m`;
+                
                 const content = document.createElement('div');
                 content.style.position = 'relative';
-                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#FF3333;">총 거리: ${totalLength}m</div>`;
+                content.appendChild(textLabel);
                 content.appendChild(textCloseBtn);
                 content.appendChild(deleteBtn);
                 
@@ -1793,8 +1798,8 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const savedCurrentLine = currentLine;
                 const savedFixedOverlays = [...fixedOverlays];
                 
-                // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제)
-                textCloseBtn.onclick = (e: any) => {
+                // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제, 도형 삭제 버튼은 유지)
+                textCloseBtn.addEventListener('click', (e: any) => {
                     e.stopPropagation(); // 이벤트 전파 방지
                     e.preventDefault(); // 기본 동작 방지
                     
@@ -1806,18 +1811,18 @@ const MapPane: React.FC<MapPaneProps> = ({
                             kakaoDrawingRef.current.overlays.splice(overlayIndex, 1);
                         }
                     });
-                    // 총 거리 오버레이 삭제
-                    if (totalOverlay) {
-                        totalOverlay.setMap(null);
-                        const totalOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(totalOverlay);
-                        if (totalOverlayIndex > -1) {
-                            kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
-                        }
+                    // 텍스트 라벨만 제거 (도형 삭제 버튼은 유지)
+                    if (textLabel && textLabel.parentNode) {
+                        textLabel.parentNode.removeChild(textLabel);
                     }
-                };
+                    // 텍스트 박스 닫기 버튼도 제거
+                    if (textCloseBtn && textCloseBtn.parentNode) {
+                        textCloseBtn.parentNode.removeChild(textCloseBtn);
+                    }
+                });
                 
                 // 측정 객체 삭제 버튼 (해당 객체와 해당 객체의 텍스트 모두 삭제)
-                deleteBtn.onclick = (e: any) => {
+                deleteBtn.addEventListener('click', (e: any) => {
                     e.stopPropagation(); // 이벤트 전파 방지
                     e.preventDefault(); // 기본 동작 방지
                     
@@ -1846,7 +1851,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                             kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
                         }
                     }
-                };
+                });
                 
                 map.setCursor('default');
                 currentLine = null;
@@ -2019,9 +2024,14 @@ const MapPane: React.FC<MapPaneProps> = ({
                     deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
                     deleteBtn.title = '측정 객체 삭제';
                     
+                    const textLabel = document.createElement('div');
+                    textLabel.className = 'measure-label';
+                    textLabel.style.cssText = 'background:white; border:2px solid #39f; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#39f;';
+                    textLabel.textContent = `면적: ${area}m²`;
+                    
                     const content = document.createElement('div');
                     content.style.position = 'relative';
-                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#39f;">면적: ${area}m²</div>`;
+                    content.appendChild(textLabel);
                     content.appendChild(textCloseBtn);
                     content.appendChild(deleteBtn);
                     
@@ -2037,23 +2047,23 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 참조 저장 (currentPoly가 null로 설정되기 전에 저장)
                     const savedCurrentPoly = currentPoly;
                     
-                    // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제)
-                    textCloseBtn.onclick = (e: any) => {
+                    // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제, 도형 삭제 버튼은 유지)
+                    textCloseBtn.addEventListener('click', (e: any) => {
                         e.stopPropagation(); // 이벤트 전파 방지
                         e.preventDefault(); // 기본 동작 방지
                         
-                        // 면적 오버레이 삭제 (측정 결과 텍스트)
-                        if (areaOverlay) {
-                            areaOverlay.setMap(null);
-                            const areaOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(areaOverlay);
-                            if (areaOverlayIndex > -1) {
-                                kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
-                            }
+                        // 텍스트 라벨만 제거 (도형 삭제 버튼은 유지)
+                        if (textLabel && textLabel.parentNode) {
+                            textLabel.parentNode.removeChild(textLabel);
                         }
-                    };
+                        // 텍스트 박스 닫기 버튼도 제거
+                        if (textCloseBtn && textCloseBtn.parentNode) {
+                            textCloseBtn.parentNode.removeChild(textCloseBtn);
+                        }
+                    });
                     
                     // 측정 객체 삭제 버튼 (해당 객체와 해당 객체의 텍스트 모두 삭제)
-                    deleteBtn.onclick = (e: any) => {
+                    deleteBtn.addEventListener('click', (e: any) => {
                         e.stopPropagation(); // 이벤트 전파 방지
                         e.preventDefault(); // 기본 동작 방지
                         
@@ -2074,7 +2084,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                                 kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
                             }
                         }
-                    };
+                    });
                     
                     currentPoly = null;
                     map.setCursor('default');
