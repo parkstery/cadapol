@@ -29,19 +29,10 @@ export class GoogleMapProvider implements MapProvider {
       throw new Error('Container element is required');
     }
     
-    // 거리뷰용 컨테이너 설정 (외부에서 제공되면 사용, 없으면 생성)
-    if (config.panoContainer) {
-      this.panoContainer = config.panoContainer;
-      // 외부 컨테이너의 스타일이 이미 설정되어 있을 수 있으므로 확인
-      if (!this.panoContainer.style.position) {
-        this.panoContainer.style.cssText = 'position: absolute; inset: 0; background: black; z-index: 10;';
-      }
-    } else {
-      // 폴백: 자체 컨테이너 생성
-      this.panoContainer = document.createElement('div');
-      this.panoContainer.style.cssText = 'position: absolute; inset: 0; background: black; z-index: 10;';
-      config.container.appendChild(this.panoContainer);
-    }
+    // 거리뷰용 컨테이너 생성 (기존 구조와 호환)
+    this.panoContainer = document.createElement('div');
+    this.panoContainer.style.display = 'none';
+    config.container.appendChild(this.panoContainer);
     
     // StreetView Panorama 초기화
     this.panorama = new google.maps.StreetViewPanorama(this.panoContainer, {
@@ -69,7 +60,6 @@ export class GoogleMapProvider implements MapProvider {
     });
     
     this.setupListeners();
-    this.setupPanoramaListeners(config);
   }
   
   private async waitForSDK(): Promise<void> {
@@ -127,80 +117,6 @@ export class GoogleMapProvider implements MapProvider {
       }
     });
     this.listeners.push(zoomListener);
-  }
-  
-  private setupPanoramaListeners(config: MapProviderConfig): void {
-    if (!this.panorama || !this.map) return;
-    
-    // visible_changed 이벤트 (거리뷰 표시/숨김)
-    const visibleListener = this.panorama.addListener('visible_changed', () => {
-      const isVisible = this.panorama!.getVisible();
-      
-      if (isVisible) {
-        // 거리뷰 활성화 시
-        if (this.coverageLayer) {
-          this.coverageLayer.setMap(this.map);
-        }
-        
-        // 미니맵 중앙으로 이동
-        const pos = this.panorama!.getPosition();
-        if (pos && this.map) {
-          const lat = pos.lat();
-          const lng = pos.lng();
-          this.map.setCenter({ lat, lng });
-          
-          const state: MapState = {
-            lat,
-            lng,
-            zoom: this.map.getZoom() || 17,
-          };
-          config.onStateChange(state);
-          
-          // 거리뷰 상태 업데이트
-          if (config.onStreetViewChange) {
-            config.onStreetViewChange({ lat, lng, active: true });
-          }
-        }
-      } else {
-        // 거리뷰 비활성화 시
-        if (this.coverageLayer) {
-          this.coverageLayer.setMap(null);
-        }
-        
-        // 거리뷰 상태 업데이트
-        if (config.onStreetViewChange) {
-          config.onStreetViewChange(null);
-        }
-      }
-    });
-    this.listeners.push(visibleListener);
-    
-    // position_changed 이벤트 (거리뷰 위치 변경)
-    const positionListener = this.panorama.addListener('position_changed', () => {
-      if (this.panorama!.getVisible() && this.map) {
-        const pos = this.panorama!.getPosition();
-        if (pos) {
-          const lat = pos.lat();
-          const lng = pos.lng();
-          
-          // 거리뷰 상태 업데이트
-          if (config.onStreetViewChange) {
-            config.onStreetViewChange({ lat, lng, active: true });
-          }
-          
-          // 미니맵 중앙으로 이동
-          this.map.setCenter({ lat, lng });
-          
-          const state: MapState = {
-            lat,
-            lng,
-            zoom: this.map.getZoom() || 17,
-          };
-          config.onStateChange(state);
-        }
-      }
-    });
-    this.listeners.push(positionListener);
   }
   
   syncState(state: MapState): void {
@@ -419,38 +335,6 @@ export class GoogleMapProvider implements MapProvider {
    */
   getCoverageLayer(): google.maps.StreetViewCoverageLayer | null {
     return this.coverageLayer;
-  }
-  
-  /**
-   * 거리뷰 시작
-   */
-  startStreetView(lat: number, lng: number): void {
-    if (!this.panorama) return;
-    this.panorama.setPosition({ lat, lng });
-    this.panorama.setVisible(true);
-  }
-  
-  /**
-   * 거리뷰 종료
-   */
-  stopStreetView(): void {
-    if (!this.panorama) return;
-    this.panorama.setVisible(false);
-  }
-  
-  /**
-   * 거리뷰 위치 설정
-   */
-  setStreetViewPosition(lat: number, lng: number): void {
-    if (!this.panorama) return;
-    this.panorama.setPosition({ lat, lng });
-  }
-  
-  /**
-   * 거리뷰 활성화 여부 확인
-   */
-  isStreetViewActive(): boolean {
-    return this.panorama ? this.panorama.getVisible() : false;
   }
   
   getName(): string {

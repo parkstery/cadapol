@@ -8,11 +8,6 @@ import { MapProvider } from './map-providers/BaseMapProvider';
 import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
-// 🆕 레이어 시스템
-import { LayerManager } from './layers/LayerManager';
-import { CadastralLayer } from './layers/CadastralLayer';
-import { LayerType } from '../types';
-import { createDefaultLayerConfig } from './layers/BaseLayer';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -42,9 +37,6 @@ const MapPane: React.FC<MapPaneProps> = ({
   // 🆕 새 Provider 시스템 (점진적 마이그레이션)
   const mapProviderRef = useRef<MapProvider | null>(null);
   const useNewProvider = config.type === 'google' || config.type === 'kakao' || config.type === 'naver'; // 모든 맵 새 Provider 사용 (점진적 마이그레이션)
-  
-  // 🆕 레이어 관리자
-  const layerManagerRef = useRef<LayerManager | null>(null);
   
   // -- Sync Control Refs --
   const isDragging = useRef(false); 
@@ -137,12 +129,6 @@ const MapPane: React.FC<MapPaneProps> = ({
               initialState: globalState,
               isSatellite: config.isSatellite,
               onStateChange: onStateChange,
-              panoContainer: googlePanoRef.current || undefined, // 🆕 거리뷰 컨테이너 전달
-              onStreetViewChange: (state) => {
-                // 🆕 거리뷰 상태 변경 시 isStreetViewActive도 업데이트
-                setIsStreetViewActive(state !== null && state.active);
-                onStreetViewChange(state); // 원본 콜백 호출
-              },
             }).then(() => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
@@ -151,25 +137,61 @@ const MapPane: React.FC<MapPaneProps> = ({
               if (provider instanceof GoogleMapProvider) {
                 googlePanoInstanceRef.current = provider.getPanoramaInstance();
                 googleCoverageLayerRef.current = provider.getCoverageLayer();
+                
+                // 거리뷰 이벤트 리스너 설정
+                const panorama = provider.getPanoramaInstance();
+                if (panorama) {
+                  panorama.addListener('visible_changed', () => {
+                    const isVisible = panorama.getVisible();
+                    setIsStreetViewActive(isVisible);
+                    if (isVisible) {
+                      const coverageLayer = provider.getCoverageLayer();
+                      if (coverageLayer && mapRef.current) {
+                        coverageLayer.setMap(mapRef.current);
+                      }
+                      // 거리뷰 시작 시 초기 위치를 미니맵 중앙으로 이동
+                      const pos = panorama.getPosition();
+                      if (pos && mapRef.current) {
+                        const lat = pos.lat();
+                        const lng = pos.lng();
+                        mapRef.current.setCenter({ lat, lng });
+                        onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
+                        // 거리뷰 상태 업데이트 (동기화를 위해)
+                        onStreetViewChange({ lat, lng, active: true });
+                      }
+                    } else {
+                      const coverageLayer = provider.getCoverageLayer();
+                      if (coverageLayer) {
+                        coverageLayer.setMap(null);
+                      }
+                      // 거리뷰 닫을 때 상태 업데이트
+                      onStreetViewChange(null);
+                    }
+                  });
+
+                  panorama.addListener('position_changed', () => {
+                    if (panorama.getVisible()) {
+                      const pos = panorama.getPosition();
+                      if (pos && mapRef.current) {
+                        const lat = pos.lat();
+                        const lng = pos.lng();
+                        isDragging.current = true; 
+                        
+                        // 거리뷰 상태 업데이트 (동기화를 위해)
+                        onStreetViewChange({ lat, lng, active: true });
+                        
+                        // 미니맵 중앙으로 이동
+                        mapRef.current.setCenter({ lat, lng });
+                        onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
+                        
+                        setTimeout(() => isDragging.current = false, 200);
+                      }
+                    }
+                  });
+                }
               }
               
-              // 🆕 레이어 관리자 초기화
-              if (!layerManagerRef.current) {
-                layerManagerRef.current = new LayerManager();
-              }
-              layerManagerRef.current.setMapProvider(provider);
-              
-              // 🆕 지적 레이어 추가 (Kakao Maps에서만) - 현재 비활성화 (기존 setupKakaoAddressClick 우선)
-              // TODO: 향후 CadastralLayer를 활성화할 때는 기존 setupKakaoAddressClick과 충돌하지 않도록 수정 필요
-              // if (config.type === 'kakao') {
-              //   const cadastralLayer = new CadastralLayer();
-              //   const cadastralConfig = createDefaultLayerConfig(
-              //     LayerType.CADASTRAL,
-              //     '지적 경계',
-              //     { visible: false } // 기본적으로 숨김
-              //   );
-              //   layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
-              // }
+              setupMapListeners('google');
               
               setSdkLoaded(true);
             }).catch((error) => {
@@ -241,10 +263,50 @@ const MapPane: React.FC<MapPaneProps> = ({
           return false;
         }
       }
-      // 3. Naver
+      // 3. Naver - 🆕 새 Provider 시스템 사용
       if (config.type === 'naver' && window.naver && window.naver.maps) {
-        if (containerRef.current) containerRef.current.innerHTML = '';
-        initNaverMap();
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+          
+          // 기존 Provider 정리
+          if (mapProviderRef.current) {
+            mapProviderRef.current.cleanup();
+            mapProviderRef.current = null;
+          }
+          
+          // 새 Provider 생성 및 초기화
+          try {
+            const provider = MapProviderFactory.create('naver');
+            provider.init({
+              container: containerRef.current,
+              initialState: globalState,
+              isSatellite: config.isSatellite,
+              onStateChange: onStateChange,
+            }).then(() => {
+              mapProviderRef.current = provider;
+              mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
+              
+              // 기존 GIS 기능 초기화 (거리뷰 레이어 등)
+              if (provider instanceof NaverMapProvider) {
+                naverStreetLayerRef.current = provider.getStreetLayer();
+              }
+              
+              setupMapListeners('naver');
+              
+              setSdkLoaded(true);
+            }).catch((error) => {
+              console.error('NaverMapProvider initialization failed:', error);
+              // 실패 시 기존 방식으로 폴백
+              initNaverMap();
+              setSdkLoaded(true);
+            });
+          } catch (error) {
+            console.error('NaverMapProvider creation failed:', error);
+            // 실패 시 기존 방식으로 폴백
+            initNaverMap();
+            setSdkLoaded(true);
+          }
+        }
         return true;
       }
       return false;
@@ -1322,8 +1384,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
+    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step1: Script load error");
       delete (window as any)[callbackName];
@@ -1355,8 +1417,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step2: Script load error");
       delete (window as any)[callbackName];
@@ -1742,16 +1804,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     // 현재 거리뷰 위치와 동일하면 무시 (무한 루프 방지)
     if (isStreetViewActive) {
       let currentLat = 0, currentLng = 0;
-      // 🆕 새 Provider 시스템 사용 시
-      if (useNewProvider && mapProviderRef.current && config.type === 'google' && mapProviderRef.current instanceof GoogleMapProvider) {
-        const panorama = mapProviderRef.current.getPanoramaInstance();
-        if (panorama && panorama.getPosition()) {
-          const pos = panorama.getPosition();
-          currentLat = pos.lat();
-          currentLng = pos.lng();
-        }
-      } else if (config.type === 'google' && googlePanoInstanceRef.current && googlePanoInstanceRef.current.getPosition()) {
-        // 기존 방식
+      if (config.type === 'google' && googlePanoInstanceRef.current && googlePanoInstanceRef.current.getPosition()) {
         const pos = googlePanoInstanceRef.current.getPosition();
         currentLat = pos.lat();
         currentLng = pos.lng();
@@ -1773,12 +1826,8 @@ const MapPane: React.FC<MapPaneProps> = ({
     
     // 현재 패널이 이미 거리뷰를 보고 있지 않은 경우에만 동기화
     if (!isStreetViewActive) {
-      // 🆕 새 Provider 시스템 사용 시
-      if (useNewProvider && mapProviderRef.current && config.type === 'google' && mapProviderRef.current instanceof GoogleMapProvider) {
-        mapProviderRef.current.startStreetView(lat, lng);
-        setIsStreetViewActive(true);
-      } else if (config.type === 'google' && googlePanoInstanceRef.current) {
-        // 기존 방식
+      if (config.type === 'google' && googlePanoInstanceRef.current) {
+        // 구글맵 거리뷰 시작
         googlePanoInstanceRef.current.setPosition({ lat, lng });
         googlePanoInstanceRef.current.setVisible(true);
         setIsStreetViewActive(true);
@@ -2009,11 +2058,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       }
     } else {
       // 이미 거리뷰가 활성화된 경우 위치만 업데이트
-      // 🆕 새 Provider 시스템 사용 시
-      if (useNewProvider && mapProviderRef.current && config.type === 'google' && mapProviderRef.current instanceof GoogleMapProvider) {
-        mapProviderRef.current.setStreetViewPosition(lat, lng);
-      } else if (config.type === 'google' && googlePanoInstanceRef.current) {
-        // 기존 방식
+      if (config.type === 'google' && googlePanoInstanceRef.current) {
         googlePanoInstanceRef.current.setPosition({ lat, lng });
       } else if (config.type === 'kakao' && kakaoGisRef.current.rv && kakaoGisRef.current.rvClient) {
         const pos = new window.kakao.maps.LatLng(lat, lng);
@@ -3042,19 +3087,6 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   const toggleKakaoCadastral = useCallback(() => {
     if (config.type !== 'kakao' || !mapRef.current) return;
-    
-    // 🆕 새 레이어 시스템 사용
-    if (layerManagerRef.current) {
-      const cadastralLayers = layerManagerRef.current.getLayersByType(LayerType.CADASTRAL);
-      if (cadastralLayers.length > 0) {
-        const cadastralLayer = cadastralLayers[0];
-        const layerId = cadastralLayer.getId();
-        const isVisible = layerManagerRef.current.toggleLayer(layerId);
-        return;
-      }
-    }
-    
-    // 기존 방식 (폴백)
     const isCadastral = kakaoGisRef.current.roadviewLayer;
     if (isCadastral) mapRef.current.removeOverlayMapTypeId(window.kakao.maps.MapTypeId.USE_DISTRICT);
     else mapRef.current.addOverlayMapTypeId(window.kakao.maps.MapTypeId.USE_DISTRICT);
@@ -3089,15 +3121,8 @@ const MapPane: React.FC<MapPaneProps> = ({
     setIsStreetViewActive(false);
     onStreetViewChange(null); // 거리뷰 상태 초기화 (동기화를 위해)
     if (config.type === 'google') {
-      // 🆕 새 Provider 시스템 사용 시
-      if (useNewProvider && mapProviderRef.current && mapProviderRef.current instanceof GoogleMapProvider) {
-        mapProviderRef.current.stopStreetView();
-        if (googleCoverageLayerRef.current) googleCoverageLayerRef.current.setMap(null);
-      } else {
-        // 기존 방식
-        if (googlePanoInstanceRef.current) googlePanoInstanceRef.current.setVisible(false);
-        if (googleCoverageLayerRef.current) googleCoverageLayerRef.current.setMap(null);
-      }
+      if (googlePanoInstanceRef.current) googlePanoInstanceRef.current.setVisible(false);
+      if (googleCoverageLayerRef.current) googleCoverageLayerRef.current.setMap(null);
     }
     // Fix: Clean up Kakao Roadview overlays/handlers
     if (config.type === 'kakao' && mapRef.current) {

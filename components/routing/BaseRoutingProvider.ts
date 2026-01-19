@@ -1,6 +1,7 @@
 // routing/BaseRoutingProvider.ts
 
-import { Waypoint, Route, RouteOptions, MapVendor } from '../../types';
+import { RouteOptions, Route, RouteStep } from '../../types';
+import { MapProvider } from '../map-providers/BaseMapProvider';
 
 /**
  * 경로 표시 인터페이스
@@ -11,35 +12,22 @@ export interface RouteDisplay {
   remove(): void;
   highlight(): void;
   unhighlight(): void;
-  setVisible(visible: boolean): void;
 }
 
 /**
  * 길찾기 제공자 기본 인터페이스
  * 모든 길찾기 제공자는 이 인터페이스를 구현해야 합니다.
  */
-export interface BaseRoutingProvider {
-  // 초기화
-  init(mapInstance: any, config?: any): void;
-  
+export interface RoutingProvider {
   // 경로 계산
-  findRoute(waypoints: Waypoint[], options?: Partial<RouteOptions>): Promise<Route | null>;
+  calculateRoute(options: RouteOptions): Promise<Route[]>;
   
   // 경로 표시
-  displayRoute(route: Route): RouteDisplay | null;
-  
-  // 경로 제거
-  clearRoute(display?: RouteDisplay): void;
-  
-  // 모든 경로 제거
-  clearAllRoutes(): void;
-  
-  // 리소스 정리
-  cleanup(): void;
+  displayRoute(route: Route, mapProvider: MapProvider): RouteDisplay;
+  removeRoute(routeDisplay: RouteDisplay): void;
   
   // 제공자 정보
-  getMapVendor(): MapVendor;
   getName(): string;
   getSupportedTravelModes(): string[];
-  getMaxWaypoints(): number;
+  getMaxWaypoints(): number;  // 최대 경유지 수 (출발지 + 경유지 + 목적지)
 }
