@@ -1368,12 +1368,6 @@ const MapPane: React.FC<MapPaneProps> = ({
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      // 에러 응답 확인
-      if (data.response && data.response.status === 'ERROR') {
-        console.error("Step2: VWorld API Error", data.response.error);
-        return;
-      }
-
       // Reference 코드와 동일한 형식으로 수정
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
