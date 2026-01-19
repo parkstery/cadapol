@@ -13,10 +13,12 @@ import { LayerManager } from './layers/LayerManager';
 import { CadastralLayer } from './layers/CadastralLayer';
 import { LayerType } from '../types';
 import { createDefaultLayerConfig } from './layers/BaseLayer';
-// 🆕 레이어 시스템
-import { LayerManager } from './layers/LayerManager';
-import { CadastralLayer } from './layers/CadastralLayer';
-import { LayerType, createDefaultLayerConfig } from './layers/BaseLayer';
+// 🆕 길찾기 시스템
+import { RoutingManager } from './routing/RoutingManager';
+import { GoogleRoutingProvider } from './routing/providers/GoogleRoutingProvider';
+import { KakaoRoutingProvider } from './routing/providers/KakaoRoutingProvider';
+import { Waypoint, RouteOptions } from '../types';
+import RoutingPanel from './RoutingPanel';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -172,6 +174,22 @@ const MapPane: React.FC<MapPaneProps> = ({
                   { visible: false } // 기본적으로 숨김
                 );
                 layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
+              }
+              
+              // 🆕 길찾기 관리자 초기화
+              if (!routingManagerRef.current) {
+                routingManagerRef.current = new RoutingManager();
+              }
+              
+              // 맵 제공자별 RoutingProvider 설정
+              if (config.type === 'google') {
+                const routingProvider = new GoogleRoutingProvider();
+                routingProvider.init(mapRef.current);
+                routingManagerRef.current.setRoutingProvider(routingProvider);
+              } else if (config.type === 'kakao') {
+                const routingProvider = new KakaoRoutingProvider();
+                routingProvider.init(mapRef.current);
+                routingManagerRef.current.setRoutingProvider(routingProvider);
               }
               
               setSdkLoaded(true);
@@ -3225,6 +3243,55 @@ const MapPane: React.FC<MapPaneProps> = ({
          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-[120] text-gray-500">
             <span>Loading...</span>
          </div>
+      )}
+
+      {/* 🆕 길찾기 패널 */}
+      {isRoutingPanelOpen && (
+        <RoutingPanel
+          onCalculateRoute={async (waypoints: Waypoint[], options?: Partial<RouteOptions>) => {
+            if (!routingManagerRef.current) {
+              alert('길찾기 기능을 사용할 수 없습니다.');
+              return;
+            }
+
+            try {
+              const route = await routingManagerRef.current.calculateAndDisplayRoute(waypoints, options);
+              if (route) {
+                setCurrentRoute({ distance: route.distance, duration: route.duration });
+              } else {
+                alert('경로를 찾을 수 없습니다.');
+              }
+            } catch (error) {
+              console.error('Route calculation error:', error);
+              alert('경로 계산 중 오류가 발생했습니다.');
+            }
+          }}
+          onClose={() => {
+            setIsRoutingPanelOpen(false);
+            if (routingManagerRef.current) {
+              routingManagerRef.current.clearAllRoutes();
+            }
+            setCurrentRoute(null);
+          }}
+          currentRoute={currentRoute}
+        />
+      )}
+
+      {/* 🆕 길찾기 버튼 */}
+      {sdkLoaded && (config.type === 'google' || config.type === 'kakao') && (
+        <button
+          onClick={() => setIsRoutingPanelOpen(!isRoutingPanelOpen)}
+          className={`absolute top-4 ${isStreetViewActive ? 'right-4' : 'right-[50px]'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
+            isRoutingPanelOpen
+              ? 'bg-blue-600 text-white border-blue-700'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+          title="길찾기"
+        >
+          <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+        </button>
       )}
 
        {/* 전체화면 버튼 - 모든 맵에서 우상단, 거리뷰 활성화 시 오른쪽으로 이동 */}
