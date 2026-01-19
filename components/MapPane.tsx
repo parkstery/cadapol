@@ -659,6 +659,10 @@ const MapPane: React.FC<MapPaneProps> = ({
         window.naver.maps.Event.clearInstanceListeners(naverPanoramaRef.current);
       }
       
+      // setCenter 호출 debounce를 위한 타이머
+      let centerUpdateTimer: any = null;
+      let lastCenterPos: any = null;
+      
       // 컨테이너 스타일 확인 및 조정 (전체 영역 채우기 보장)
       if (container) {
         container.style.position = 'absolute';
@@ -737,6 +741,38 @@ const MapPane: React.FC<MapPaneProps> = ({
         setIsStreetViewActive(false);
       });
 
+      // setCenter 호출을 debounce하는 함수
+      const debouncedSetCenter = (pos: any) => {
+        if (!pos || !mapRef.current) return;
+        
+        // 현재 중심과 비교하여 불필요한 호출 방지
+        const currentCenter = mapRef.current.getCenter();
+        if (currentCenter && lastCenterPos) {
+          const latDiff = Math.abs(currentCenter.lat() - pos.lat());
+          const lngDiff = Math.abs(currentCenter.lng() - pos.lng());
+          // 위치 차이가 매우 작으면 (같은 위치) 무시
+          if (latDiff < 0.00001 && lngDiff < 0.00001) {
+            return;
+          }
+        }
+        
+        // 이전 타이머 취소
+        if (centerUpdateTimer) {
+          clearTimeout(centerUpdateTimer);
+        }
+        
+        // 마지막 위치 저장
+        lastCenterPos = pos;
+        
+        // debounce: 100ms 후에만 setCenter 호출
+        centerUpdateTimer = setTimeout(() => {
+          if (mapRef.current && pos) {
+            mapRef.current.setCenter(pos);
+          }
+          centerUpdateTimer = null;
+        }, 100);
+      };
+
       // 파노라마 변경 이벤트 (화살표 클릭으로 이동할 때 발생) - pano_changed가 가장 확실함
       window.naver.maps.Event.addListener(pano, 'pano_changed', () => {
         // 파노라마가 변경되면 즉시 위치 정보를 가져와서 마커 업데이트
@@ -765,8 +801,8 @@ const MapPane: React.FC<MapPaneProps> = ({
           const pov = pano.getPov();
           const angle = pov ? pov.pan : 0;
           
-          // Sync Map Center - 미니맵 중앙으로 이동
-          mapRef.current.setCenter(pos);
+          // Sync Map Center - 미니맵 중앙으로 이동 (debounce 처리)
+          debouncedSetCenter(pos);
           
           // Sync Marker - 즉시 업데이트
           if (naverMarkerRef.current) {
@@ -797,12 +833,12 @@ const MapPane: React.FC<MapPaneProps> = ({
         updateMarkerFromPano();
         
         // 파노라마 위치 정보가 아직 업데이트되지 않았을 수 있으므로 짧은 딜레이 후 재시도
-        setTimeout(updateMarkerFromPano, 50);
-        setTimeout(updateMarkerFromPano, 150);
-        setTimeout(updateMarkerFromPano, 300);
+        setTimeout(updateMarkerFromPano, 100);
+        setTimeout(updateMarkerFromPano, 200);
       });
 
       // 파노라마 링크 변경 이벤트 (클릭으로 이동할 때 발생) - 보조 이벤트
+      // pano_changed 이벤트가 이미 처리하므로 여기서는 마커만 업데이트 (setCenter는 제외)
       window.naver.maps.Event.addListener(pano, 'links_changed', () => {
         // 링크 변경 후 위치가 변경될 수 있으므로 짧은 딜레이 후 마커 업데이트
         setTimeout(() => {
@@ -811,10 +847,7 @@ const MapPane: React.FC<MapPaneProps> = ({
             const pov = pano.getPov();
             const angle = pov ? pov.pan : 0;
             
-            // Sync Map Center - 미니맵 중앙으로 이동
-            mapRef.current.setCenter(pos);
-            
-            // Sync Marker - 즉시 업데이트
+            // Sync Marker - 즉시 업데이트 (setCenter는 pano_changed에서 처리)
             if (naverMarkerRef.current) {
               naverMarkerRef.current.setPosition(pos);
               naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
@@ -834,9 +867,6 @@ const MapPane: React.FC<MapPaneProps> = ({
             
             // 방향 표시 폴리곤 업데이트
             createNaverDirectionPolygon(pos, angle, mapRef.current);
-            
-            // 거리뷰 상태 업데이트 (동기화를 위해)
-            onStreetViewChange({ lat: pos.lat(), lng: pos.lng(), active: true });
           }
         }, 150);
       });
@@ -854,10 +884,8 @@ const MapPane: React.FC<MapPaneProps> = ({
         // 거리뷰 상태 업데이트 (동기화를 위해)
         onStreetViewChange({ lat, lng, active: true });
         
-        // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
-        if (mapRef.current) {
-          mapRef.current.setCenter(pos);
-        }
+        // Sync Map Center - 미니맵 중앙으로 이동 (debounce 처리)
+        debouncedSetCenter(pos);
         
         // Sync Marker - 미니맵 중앙에 위치 (삼각형 마커, 방향 동기화)
         // 즉시 업데이트 (비동기 처리 보완)
@@ -882,17 +910,6 @@ const MapPane: React.FC<MapPaneProps> = ({
           });
         }
         
-        // setCenter 후 마커 위치를 다시 확인하고 업데이트 (중앙 유지 보장)
-        requestAnimationFrame(() => {
-          if (!mapRef.current || !naverMarkerRef.current) return;
-          
-          const currentPos = pano.getPosition();
-          if (currentPos) {
-            naverMarkerRef.current.setPosition(currentPos);
-            naverMarkerRef.current.setMap(mapRef.current);
-          }
-        });
-        
         // 방향 표시 폴리곤 생성/업데이트
         if (mapRef.current) {
           createNaverDirectionPolygon(pos, angle, mapRef.current);
@@ -907,20 +924,19 @@ const MapPane: React.FC<MapPaneProps> = ({
         const angle = pov ? pov.pan : 0;
         const pos = pano.getPosition();
         
-        // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
+        // Sync Map Center - 미니맵 중앙으로 이동 (debounce 처리, pov_changed는 방향만 변경되므로 setCenter는 최소화)
         if (mapRef.current && pos) {
-          mapRef.current.setCenter(pos);
-          
-          // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
-          requestAnimationFrame(() => {
-            if (!mapRef.current || !naverMarkerRef.current) return;
-            
-            const currentPos = pano.getPosition();
-            if (currentPos) {
-              naverMarkerRef.current.setPosition(currentPos);
-              naverMarkerRef.current.setMap(mapRef.current);
+          // 방향 변경만 있는 경우 setCenter는 호출하지 않음 (이미 중앙에 있으므로)
+          // 하지만 위치가 변경된 경우에만 setCenter 호출
+          const currentCenter = mapRef.current.getCenter();
+          if (currentCenter) {
+            const latDiff = Math.abs(currentCenter.lat() - pos.lat());
+            const lngDiff = Math.abs(currentCenter.lng() - pos.lng());
+            // 위치 차이가 있는 경우에만 setCenter 호출
+            if (latDiff > 0.00001 || lngDiff > 0.00001) {
+              debouncedSetCenter(pos);
             }
-          });
+          }
         }
         
         if (naverMarkerRef.current && mapRef.current && pos) {
