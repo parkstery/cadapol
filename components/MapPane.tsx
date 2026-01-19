@@ -13,12 +13,6 @@ import { LayerManager } from './layers/LayerManager';
 import { CadastralLayer } from './layers/CadastralLayer';
 import { LayerType } from '../types';
 import { createDefaultLayerConfig } from './layers/BaseLayer';
-// 🆕 길찾기 시스템
-import { RoutingManager } from './routing/RoutingManager';
-import { GoogleRoutingProvider } from './routing/providers/GoogleRoutingProvider';
-import { KakaoRoutingProvider } from './routing/providers/KakaoRoutingProvider';
-import { Waypoint, RouteOptions } from '../types';
-import RoutingPanel from './RoutingPanel';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -51,11 +45,6 @@ const MapPane: React.FC<MapPaneProps> = ({
   
   // 🆕 레이어 관리자
   const layerManagerRef = useRef<LayerManager | null>(null);
-  
-  // 🆕 길찾기 관리자
-  const routingManagerRef = useRef<RoutingManager | null>(null);
-  const [isRoutingPanelOpen, setIsRoutingPanelOpen] = useState(false);
-  const [currentRoute, setCurrentRoute] = useState<{ distance: number; duration: number } | null>(null);
   
   // -- Sync Control Refs --
   const isDragging = useRef(false); 
@@ -170,32 +159,15 @@ const MapPane: React.FC<MapPaneProps> = ({
               }
               layerManagerRef.current.setMapProvider(provider);
               
-              // 🆕 지적 레이어 추가 (Kakao Maps에서만) - 현재 비활성화 (기존 기능 우선)
-              // TODO: 향후 CadastralLayer를 활성화할 때는 기존 setupKakaoAddressClick과 충돌하지 않도록 수정 필요
-              // if (config.type === 'kakao') {
-              //   const cadastralLayer = new CadastralLayer();
-              //   const cadastralConfig = createDefaultLayerConfig(
-              //     LayerType.CADASTRAL,
-              //     '지적 경계',
-              //     { visible: false } // 기본적으로 숨김
-              //   );
-              //   layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
-              // }
-              
-              // 🆕 길찾기 관리자 초기화
-              if (!routingManagerRef.current) {
-                routingManagerRef.current = new RoutingManager();
-              }
-              
-              // 맵 제공자별 RoutingProvider 설정
-              if (config.type === 'google') {
-                const routingProvider = new GoogleRoutingProvider();
-                routingProvider.init(mapRef.current);
-                routingManagerRef.current.setRoutingProvider(routingProvider);
-              } else if (config.type === 'kakao') {
-                const routingProvider = new KakaoRoutingProvider();
-                routingProvider.init(mapRef.current);
-                routingManagerRef.current.setRoutingProvider(routingProvider);
+              // 🆕 지적 레이어 추가 (Kakao Maps에서만)
+              if (config.type === 'kakao') {
+                const cadastralLayer = new CadastralLayer();
+                const cadastralConfig = createDefaultLayerConfig(
+                  LayerType.CADASTRAL,
+                  '지적 경계',
+                  { visible: false } // 기본적으로 숨김
+                );
+                layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
               }
               
               setSdkLoaded(true);
@@ -1303,7 +1275,6 @@ const MapPane: React.FC<MapPaneProps> = ({
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      // Reference 코드와 동일한 형식으로 수정
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         const pnu = feature.properties.pnu;
@@ -1350,8 +1321,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
+    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step1: Script load error");
       delete (window as any)[callbackName];
@@ -1368,19 +1339,23 @@ const MapPane: React.FC<MapPaneProps> = ({
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      // Reference 코드와 동일한 형식으로 수정
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         if (feature.geometry) {
+          console.log("Step2: Geometry retrieved", feature.geometry.type);
           drawParcelPolygon(feature.geometry, currentMap);
+        } else {
+          console.warn("Step2: No geometry in feature");
         }
+      } else {
+        console.warn("Step2: No features found or API error", data.response);
       }
     };
 
     const script = document.createElement('script');
     script.id = callbackName;
-    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step2: Script load error");
       delete (window as any)[callbackName];
@@ -3246,59 +3221,6 @@ const MapPane: React.FC<MapPaneProps> = ({
          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-[120] text-gray-500">
             <span>Loading...</span>
          </div>
-      )}
-
-      {/* 🆕 길찾기 패널 */}
-      {isRoutingPanelOpen && (
-        <RoutingPanel
-          onCalculateRoute={async (waypoints: Waypoint[], options?: Partial<RouteOptions>) => {
-            if (!routingManagerRef.current) {
-              alert('길찾기 기능을 사용할 수 없습니다.');
-              return;
-            }
-
-            try {
-              const route = await routingManagerRef.current.calculateAndDisplayRoute(waypoints, options);
-              if (route) {
-                setCurrentRoute({ distance: route.distance, duration: route.duration });
-              } else {
-                alert('경로를 찾을 수 없습니다.');
-              }
-            } catch (error) {
-              console.error('Route calculation error:', error);
-              alert('경로 계산 중 오류가 발생했습니다.');
-            }
-          }}
-          onClose={() => {
-            setIsRoutingPanelOpen(false);
-            if (routingManagerRef.current) {
-              routingManagerRef.current.clearAllRoutes();
-            }
-            setCurrentRoute(null);
-          }}
-          currentRoute={currentRoute}
-        />
-      )}
-
-      {/* 🆕 길찾기 버튼 - KakaoGisToolbar와 겹치지 않도록 위치 조정 */}
-      {sdkLoaded && (config.type === 'google' || config.type === 'kakao') && (
-        <button
-          onClick={() => setIsRoutingPanelOpen(!isRoutingPanelOpen)}
-          className={`absolute top-4 ${
-            config.type === 'kakao' 
-              ? (isStreetViewActive ? 'right-[240px]' : 'right-[210px]') // KakaoGisToolbar(180px) + 간격(30px)
-              : (isStreetViewActive ? 'right-4' : 'right-[50px]') // Google Maps는 기존 위치 유지
-          } z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
-            isRoutingPanelOpen
-              ? 'bg-blue-600 text-white border-blue-700'
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-          }`}
-          title="길찾기"
-        >
-          <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-          </svg>
-        </button>
       )}
 
        {/* 전체화면 버튼 - 모든 맵에서 우상단, 거리뷰 활성화 시 오른쪽으로 이동 */}
