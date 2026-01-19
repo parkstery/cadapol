@@ -50,16 +50,24 @@ const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction,
       >
         📐
       </button>
-      {/* 로드뷰 버튼 (미니맵 활성화 시 숨김) */}
-      {!isStreetViewActive && (
-        <button
-          onClick={() => onAction(GISMode.ROADVIEW)}
-          title="로드뷰"
-          className={`w-9 h-8 flex items-center justify-center transition-colors ${activeMode === GISMode.ROADVIEW ? 'bg-blue-100' : 'hover:bg-gray-50'}`}
-        >
-          <img src="/streetview-icon.png" alt="로드뷰" className="w-5 h-5 object-contain" />
-        </button>
-      )}
+      {/* 로드뷰 버튼 (거리뷰 활성화 상태에서도 표시) */}
+      <button
+        onClick={() => {
+          if (isStreetViewActive) {
+            // 거리뷰가 활성화된 상태에서 버튼을 클릭하면 거리뷰를 끄기 위해 closeStreetView 호출
+            // 하지만 KakaoGisToolbar에서는 closeStreetView에 직접 접근할 수 없으므로
+            // onAction을 통해 처리하도록 수정 필요
+            // 일단 onAction을 호출하면 handleKakaoAction에서 토글 처리
+            onAction(GISMode.ROADVIEW);
+          } else {
+            onAction(GISMode.ROADVIEW);
+          }
+        }}
+        title={isStreetViewActive ? '로드뷰 닫기' : '로드뷰'}
+        className={`w-9 h-8 flex items-center justify-center transition-colors ${isStreetViewActive || activeMode === GISMode.ROADVIEW ? 'bg-blue-600 text-white' : 'hover:bg-gray-50'}`}
+      >
+        <img src="/streetview-icon.png" alt="로드뷰" className="w-5 h-5 object-contain" />
+      </button>
     </div>
   );
 };

@@ -2567,6 +2567,31 @@ const MapPane: React.FC<MapPaneProps> = ({
   const handleKakaoAction = useCallback((mode: GISMode) => {
      if (config.type !== 'kakao' || !mapRef.current) return;
      
+     // 거리뷰가 활성화된 상태에서 로드뷰 버튼을 클릭하면 거리뷰를 닫기
+     if (mode === GISMode.ROADVIEW && isStreetViewActive) {
+         setIsStreetViewActive(false);
+         onStreetViewChange(null); // 거리뷰 상태 초기화 (동기화를 위해)
+         if (gisMode === GISMode.ROADVIEW) {
+             mapRef.current.removeOverlayMapTypeId(window.kakao.maps.MapTypeId.ROADVIEW);
+             if (kakaoGisRef.current.clickHandler) {
+                 window.kakao.maps.event.removeListener(mapRef.current, 'click', kakaoGisRef.current.clickHandler);
+                 kakaoGisRef.current.clickHandler = null;
+             }
+             if (kakaoGisRef.current.walkerOverlay) {
+                 kakaoGisRef.current.walkerOverlay.setMap(null);
+                 kakaoGisRef.current.walkerOverlay = null;
+             }
+             if (kakaoGisRef.current.directionPolygon) {
+                 kakaoGisRef.current.directionPolygon.setMap(null);
+                 kakaoGisRef.current.directionPolygon = null;
+             }
+             kakaoGisRef.current.polygonState = null;
+             mapRef.current.setCursor('default');
+             setGisMode(GISMode.DEFAULT);
+         }
+         return;
+     }
+     
      // 토글 모드: 같은 모드를 다시 클릭하면 DEFAULT로 변경
      if (gisMode === mode) {
          // 거리/면적 측정 모드인 경우 토글하여 끄기
@@ -2735,7 +2760,7 @@ const MapPane: React.FC<MapPaneProps> = ({
      }
 
      setGisMode(mode);
-  }, [config.type, gisMode]);
+  }, [config.type, gisMode, isStreetViewActive, onStreetViewChange]);
 
   const toggleKakaoCadastral = useCallback(() => {
     if (config.type !== 'kakao' || !mapRef.current) return;
@@ -2906,11 +2931,13 @@ const MapPane: React.FC<MapPaneProps> = ({
          onClick={onToggleFullscreen}
          className={`absolute z-[110] bg-white p-1.5 rounded shadow border border-gray-300 hover:bg-gray-50 transition-colors top-4 ${
            isStreetViewActive 
-             ? 'right-[50px]'  // 거리뷰 닫기(16px) + 간격(2px) + 버튼(32px) = 50px
+             ? config.type === 'naver'
+               ? 'right-[50px]'  // 네이버: 거리뷰 버튼(16px) + 간격(2px) + 버튼(32px) = 50px
+               : 'right-[50px]'  // 카카오/구글: 거리뷰 닫기(16px) + 간격(2px) + 버튼(32px) = 50px
              : config.type === 'google'
                ? 'right-16'  // 구글맵 pegman 옆에 배치
                : config.type === 'naver'
-                 ? 'right-4'  // 네이버맵: 오른쪽 상단 (거리뷰 버튼과 위치 교체)
+                 ? 'right-[50px]'  // 네이버맵: 거리뷰 버튼 옆에 배치
                  : 'right-4'   // 카카오맵
          }`}
          title="전체화면"
@@ -2922,12 +2949,12 @@ const MapPane: React.FC<MapPaneProps> = ({
         )}
       </button>
       
-      {/* 네이버 거리뷰 버튼 - 우상단 배치 (미니맵 활성화 시 숨김) */}
-      {config.type === 'naver' && !isStreetViewActive && (
+      {/* 네이버 거리뷰 버튼 - 우상단 배치 (거리뷰 활성화 상태에서도 표시) */}
+      {config.type === 'naver' && (
         <button 
-          onClick={toggleNaverStreetLayer} 
-          className={`absolute top-4 right-[50px] z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-          title={isNaverLayerOn ? '거리뷰 끄기' : '거리뷰 켜기'}
+          onClick={isStreetViewActive ? closeStreetView : toggleNaverStreetLayer} 
+          className={`absolute top-4 ${isStreetViewActive ? 'right-4' : 'right-[50px]'} z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isStreetViewActive || isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          title={isStreetViewActive ? '거리뷰 닫기' : (isNaverLayerOn ? '거리뷰 끄기' : '거리뷰 켜기')}
         >
           <img src="/streetview-icon.png" alt="거리뷰" className="w-5 h-5 object-contain" />
         </button>
