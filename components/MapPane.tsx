@@ -49,6 +49,7 @@ const MapPane: React.FC<MapPaneProps> = ({
   const naverMarkerRef = useRef<any>(null); // Marker on Mini-map
   const naverDirectionPolygonRef = useRef<any>(null); // 방향 표시 폴리곤 (원뿔형)
   const naverMarkerIconUrlRef = useRef<string | null>(null); // 마커 아이콘 URL (메모리 정리용)
+  const naverMarkerIconUrlCacheRef = useRef<Map<number, string>>(new Map()); // 각도별 blob URL 캐시
   const naverPolygonStateRef = useRef<{ pos: any; angle: number } | null>(null); // 폴리곤 재생성을 위한 상태 저장
   const [isNaverLayerOn, setIsNaverLayerOn] = useState(false);
   
@@ -168,8 +169,18 @@ const MapPane: React.FC<MapPaneProps> = ({
         if (naverPanoramaRef.current) naverPanoramaRef.current = null;
         if (naverMarkerRef.current) { naverMarkerRef.current.setMap(null); naverMarkerRef.current = null; }
         if (naverDirectionPolygonRef.current) { naverDirectionPolygonRef.current.setMap(null); naverDirectionPolygonRef.current = null; }
+        // blob URL 캐시 정리 (마커가 완전히 제거된 후에만 revoke)
+        if (naverMarkerIconUrlCacheRef.current) {
+          naverMarkerIconUrlCacheRef.current.forEach((url) => {
+            try {
+              URL.revokeObjectURL(url);
+            } catch (e) {
+              // 이미 revoke된 경우 무시
+            }
+          });
+          naverMarkerIconUrlCacheRef.current.clear();
+        }
         if (naverMarkerIconUrlRef.current) { 
-          URL.revokeObjectURL(naverMarkerIconUrlRef.current); 
           naverMarkerIconUrlRef.current = null; 
         }
         if (naverPanoContainerRef.current) naverPanoContainerRef.current.innerHTML = '';
@@ -647,13 +658,24 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // 네이버맵 삼각형 마커 생성 헬퍼 함수
   const createNaverTriangleMarker = useCallback((angle: number = 0) => {
-    // 이전 URL 정리 (메모리 누수 방지)
-    if (naverMarkerIconUrlRef.current) {
-      URL.revokeObjectURL(naverMarkerIconUrlRef.current);
-      naverMarkerIconUrlRef.current = null;
+    // 각도를 정수로 반올림하여 캐시 키로 사용 (0.1도 단위 차이는 무시)
+    const angleKey = Math.round(angle);
+    
+    // 캐시에 해당 각도의 blob URL이 있으면 재사용
+    if (naverMarkerIconUrlCacheRef.current.has(angleKey)) {
+      const cachedUrl = naverMarkerIconUrlCacheRef.current.get(angleKey);
+      if (cachedUrl) {
+        naverMarkerIconUrlRef.current = cachedUrl;
+        return {
+          url: cachedUrl,
+          size: new window.naver.maps.Size(24, 24),
+          anchor: new window.naver.maps.Point(12, 12), // 중심 기준 (PanoID point에 일치)
+          scaledSize: new window.naver.maps.Size(24, 24)
+        };
+      }
     }
     
-    // SVG로 삼각형 마커 생성 (빨간색 삼각형, 방향 표시)
+    // 캐시에 없으면 새로 생성
     const size = 24;
     // 네이버맵 각도: 북쪽 0도, 시계방향 증가 (-180 ~ 180 범위)
     // SVG는 기본적으로 위쪽(북쪽)을 향하므로, 각도를 그대로 적용
@@ -666,6 +688,19 @@ const MapPane: React.FC<MapPaneProps> = ({
     `;
     const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
+    
+    // 캐시에 저장 (최대 10개까지만 유지하여 메모리 관리)
+    if (naverMarkerIconUrlCacheRef.current.size >= 10) {
+      // 가장 오래된 항목 제거 (FIFO)
+      const firstKey = naverMarkerIconUrlCacheRef.current.keys().next().value;
+      const oldUrl = naverMarkerIconUrlCacheRef.current.get(firstKey);
+      if (oldUrl) {
+        URL.revokeObjectURL(oldUrl);
+      }
+      naverMarkerIconUrlCacheRef.current.delete(firstKey);
+    }
+    
+    naverMarkerIconUrlCacheRef.current.set(angleKey, url);
     naverMarkerIconUrlRef.current = url; // URL 저장 (나중에 정리용)
     
     return {
@@ -2714,8 +2749,18 @@ const MapPane: React.FC<MapPaneProps> = ({
             naverDirectionPolygonRef.current.setMap(null);
             naverDirectionPolygonRef.current = null;
         }
+        // blob URL 캐시 정리 (마커가 완전히 제거된 후에만 revoke)
+        if (naverMarkerIconUrlCacheRef.current) {
+          naverMarkerIconUrlCacheRef.current.forEach((url) => {
+            try {
+              URL.revokeObjectURL(url);
+            } catch (e) {
+              // 이미 revoke된 경우 무시
+            }
+          });
+          naverMarkerIconUrlCacheRef.current.clear();
+        }
         if (naverMarkerIconUrlRef.current) {
-            URL.revokeObjectURL(naverMarkerIconUrlRef.current);
             naverMarkerIconUrlRef.current = null;
         }
     }
