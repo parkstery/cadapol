@@ -1793,8 +1793,20 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const savedCurrentLine = currentLine;
                 const savedFixedOverlays = [...fixedOverlays];
                 
-                // 텍스트 박스 닫기 버튼 (오버레이만 삭제)
-                textCloseBtn.onclick = () => {
+                // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제)
+                textCloseBtn.onclick = (e: any) => {
+                    e.stopPropagation(); // 이벤트 전파 방지
+                    e.preventDefault(); // 기본 동작 방지
+                    
+                    // 측정 도중 생성된 텍스트 박스들 삭제 (fixedOverlays)
+                    savedFixedOverlays.forEach(o => {
+                        o.setMap(null);
+                        const overlayIndex = kakaoDrawingRef.current.overlays.indexOf(o);
+                        if (overlayIndex > -1) {
+                            kakaoDrawingRef.current.overlays.splice(overlayIndex, 1);
+                        }
+                    });
+                    // 총 거리 오버레이 삭제
                     if (totalOverlay) {
                         totalOverlay.setMap(null);
                         const totalOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(totalOverlay);
@@ -1804,8 +1816,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                     }
                 };
                 
-                // 측정 객체 삭제 버튼 (폴리라인 및 모든 관련 요소 삭제)
-                deleteBtn.onclick = () => {
+                // 측정 객체 삭제 버튼 (해당 객체와 해당 객체의 텍스트 모두 삭제)
+                deleteBtn.onclick = (e: any) => {
+                    e.stopPropagation(); // 이벤트 전파 방지
+                    e.preventDefault(); // 기본 동작 방지
+                    
                     // 폴리라인 삭제 (저장된 참조 사용)
                     if (savedCurrentLine) {
                         savedCurrentLine.setMap(null);
@@ -1815,7 +1830,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                             kakaoDrawingRef.current.polylines.splice(index, 1);
                         }
                     }
-                    // 모든 오버레이 삭제 (저장된 참조 사용)
+                    // 모든 오버레이 삭제 (저장된 참조 사용) - 측정 도중 생성된 텍스트 박스들
                     savedFixedOverlays.forEach(o => {
                         o.setMap(null);
                         const overlayIndex = kakaoDrawingRef.current.overlays.indexOf(o);
@@ -2022,8 +2037,12 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 참조 저장 (currentPoly가 null로 설정되기 전에 저장)
                     const savedCurrentPoly = currentPoly;
                     
-                    // 텍스트 박스 닫기 버튼 (오버레이만 삭제)
-                    textCloseBtn.onclick = () => {
+                    // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제)
+                    textCloseBtn.onclick = (e: any) => {
+                        e.stopPropagation(); // 이벤트 전파 방지
+                        e.preventDefault(); // 기본 동작 방지
+                        
+                        // 면적 오버레이 삭제 (측정 결과 텍스트)
                         if (areaOverlay) {
                             areaOverlay.setMap(null);
                             const areaOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(areaOverlay);
@@ -2033,8 +2052,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                         }
                     };
                     
-                    // 측정 객체 삭제 버튼 (폴리곤 및 모든 관련 요소 삭제)
-                    deleteBtn.onclick = () => {
+                    // 측정 객체 삭제 버튼 (해당 객체와 해당 객체의 텍스트 모두 삭제)
+                    deleteBtn.onclick = (e: any) => {
+                        e.stopPropagation(); // 이벤트 전파 방지
+                        e.preventDefault(); // 기본 동작 방지
+                        
                         // 폴리곤 삭제 (저장된 참조 사용)
                         if (savedCurrentPoly) {
                             savedCurrentPoly.setMap(null);
@@ -2044,7 +2066,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                                 kakaoDrawingRef.current.polygons.splice(index, 1);
                             }
                         }
-                        // 면적 오버레이도 삭제
+                        // 면적 오버레이도 삭제 (측정 결과 텍스트)
                         if (areaOverlay) {
                             areaOverlay.setMap(null);
                             const areaOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(areaOverlay);
