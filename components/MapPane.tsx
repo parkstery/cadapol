@@ -31,6 +31,7 @@ const MapPane: React.FC<MapPaneProps> = ({
   // -- Sync Control Refs --
   const isDragging = useRef(false); 
   const isProgrammaticUpdate = useRef(false);
+  const isCadastralCloseClick = useRef(false); // 지적 infowindow 닫기 버튼 클릭 플래그
 
   const [sdkLoaded, setSdkLoaded] = useState(false); 
   
@@ -1361,6 +1362,12 @@ const MapPane: React.FC<MapPaneProps> = ({
     const onMapClick = (e: any) => {
       if (gisMode !== GISMode.DEFAULT) return;
       if (!kakaoGisRef.current.geocoder) return;
+      
+      // 닫기 버튼 클릭 시 지도 클릭 이벤트 무시
+      if (isCadastralCloseClick.current) {
+        isCadastralCloseClick.current = false;
+        return;
+      }
 
       const pos = e.latLng;
       const currentMap = mapRef.current;
@@ -1430,14 +1437,33 @@ const MapPane: React.FC<MapPaneProps> = ({
             closeBtn.style.background = 'rgba(0, 0, 0, 0.1)';
             closeBtn.style.color = '#64748b';
           };
-          closeBtn.onclick = (e: any) => {
+          // 닫기 버튼 클릭 핸들러
+          const handleCloseBtnClick = (e: any) => {
             e.stopPropagation();
             e.preventDefault();
+            isCadastralCloseClick.current = true; // 플래그 설정
             if (kakaoGisRef.current.cadastralOverlay) {
               kakaoGisRef.current.cadastralOverlay.setMap(null);
               kakaoGisRef.current.cadastralOverlay = null;
             }
+            // 플래그를 짧은 시간 후 리셋 (안전장치)
+            setTimeout(() => {
+              isCadastralCloseClick.current = false;
+            }, 100);
           };
+          
+          // mousedown, mouseup, click 이벤트에 모두 리스너 추가 (capture phase)
+          closeBtn.addEventListener('mousedown', (e: any) => { 
+            e.stopPropagation(); 
+            e.preventDefault(); 
+            isCadastralCloseClick.current = true;
+          }, true);
+          closeBtn.addEventListener('mouseup', (e: any) => { 
+            e.stopPropagation(); 
+            e.preventDefault(); 
+            isCadastralCloseClick.current = true;
+          }, true);
+          closeBtn.addEventListener('click', handleCloseBtnClick, true);
           
           // 내용 HTML
           contentDiv.innerHTML = `
@@ -1468,6 +1494,17 @@ const MapPane: React.FC<MapPaneProps> = ({
           
           // 닫기 버튼을 contentDiv에 추가
           contentDiv.appendChild(closeBtn);
+          
+          // contentDiv의 클릭 이벤트 전파 방지 (버튼이 아닌 부분 클릭 시 지도 클릭 방지)
+          contentDiv.addEventListener('mousedown', (e: any) => {
+            e.stopPropagation();
+          });
+          contentDiv.addEventListener('mouseup', (e: any) => {
+            e.stopPropagation();
+          });
+          contentDiv.addEventListener('click', (e: any) => {
+            e.stopPropagation();
+          });
 
           const overlay = new window.kakao.maps.CustomOverlay({
             content: contentDiv,
