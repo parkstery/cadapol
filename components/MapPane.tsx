@@ -2150,7 +2150,7 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // -- Naver Street View Click Listener & Marker Sync --
   useEffect(() => {
-    if (config.type === 'naver' && mapRef.current && sdkLoaded) {
+    if (config.type === 'naver' && mapRef.current && sdkLoaded && naverStreetLayerRef.current) {
         const map = mapRef.current;
         
         // Listen to map clicks to open Panorama
@@ -2159,6 +2159,7 @@ const MapPane: React.FC<MapPaneProps> = ({
             
             // Only proceed if the Street Layer is currently ON
             if (streetLayer && streetLayer.getMap()) {
+                console.log('Naver Street View: 클릭 이벤트 감지', e.coord);
                 const latlng = e.coord;
                 
                 // Show Panorama UI
@@ -2287,7 +2288,7 @@ const MapPane: React.FC<MapPaneProps> = ({
             window.naver.maps.Event.removeListener(clickListener);
         };
     }
-  }, [config.type, sdkLoaded]);
+  }, [config.type, sdkLoaded, naverStreetLayerRef]);
 
 
   // -- Kakao Measurement Effect --
