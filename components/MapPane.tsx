@@ -2324,22 +2324,13 @@ const MapPane: React.FC<MapPaneProps> = ({
 
         return () => {
             try {
-                if (clickListener && map) {
-                    // 네이버맵 API: removeListener는 리스너 객체를 직접 받을 수 있음
-                    // 또는 removeListener(map, event, handler) 형식
-                    if (typeof clickListener === 'function') {
-                        window.naver.maps.Event.removeListener(map, 'click', clickListener);
-                    } else if (clickListener && typeof clickListener.remove === 'function') {
-                        // 리스너 객체에 remove 메서드가 있는 경우
-                        clickListener.remove();
-                    } else {
-                        // 리스너 객체를 직접 전달
-                        window.naver.maps.Event.removeListener(clickListener);
-                    }
+                if (clickListener) {
+                    // 네이버맵 API: addListener가 반환한 리스너 객체를 removeListener에 직접 전달
+                    window.naver.maps.Event.removeListener(clickListener);
                 }
             } catch (error) {
                 // 이미 제거된 리스너이거나 유효하지 않은 리스너인 경우 무시
-                console.warn('Naver Street View: 클릭 리스너 제거 중 오류 (무시됨)', error);
+                // 에러를 출력하지 않고 조용히 무시 (정상적인 상황일 수 있음)
             }
         };
     }
