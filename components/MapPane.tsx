@@ -737,7 +737,72 @@ const MapPane: React.FC<MapPaneProps> = ({
         setIsStreetViewActive(false);
       });
 
-      // 파노라마 링크 변경 이벤트 (클릭으로 이동할 때 발생)
+      // 파노라마 변경 이벤트 (화살표 클릭으로 이동할 때 발생) - pano_changed가 가장 확실함
+      window.naver.maps.Event.addListener(pano, 'pano_changed', () => {
+        // 파노라마가 변경되면 즉시 위치 정보를 가져와서 마커 업데이트
+        const updateMarkerFromPano = () => {
+          // getLocation() 또는 getPosition() 사용하여 위치 정보 가져오기
+          let pos = null;
+          try {
+            // getLocation()이 있으면 사용 (더 정확한 위치 정보)
+            if (typeof pano.getLocation === 'function') {
+              const location = pano.getLocation();
+              if (location && location.coord) {
+                pos = location.coord;
+              }
+            }
+            // getLocation()이 없거나 실패하면 getPosition() 사용
+            if (!pos) {
+              pos = pano.getPosition();
+            }
+          } catch (e) {
+            // getLocation() 실패 시 getPosition() 사용
+            pos = pano.getPosition();
+          }
+          
+          if (!pos || !mapRef.current) return;
+          
+          const pov = pano.getPov();
+          const angle = pov ? pov.pan : 0;
+          
+          // Sync Map Center - 미니맵 중앙으로 이동
+          mapRef.current.setCenter(pos);
+          
+          // Sync Marker - 즉시 업데이트
+          if (naverMarkerRef.current) {
+            naverMarkerRef.current.setPosition(pos);
+            naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+            if (typeof naverMarkerRef.current.setAngle === 'function') {
+              naverMarkerRef.current.setAngle(angle);
+            }
+            naverMarkerRef.current.setMap(mapRef.current);
+          } else {
+            const icon = createNaverTriangleMarker(angle);
+            naverMarkerRef.current = new window.naver.maps.Marker({
+              position: pos,
+              map: mapRef.current,
+              icon: icon,
+              angle: angle
+            });
+          }
+          
+          // 방향 표시 폴리곤 업데이트
+          createNaverDirectionPolygon(pos, angle, mapRef.current);
+          
+          // 거리뷰 상태 업데이트 (동기화를 위해)
+          onStreetViewChange({ lat: pos.lat(), lng: pos.lng(), active: true });
+        };
+        
+        // 즉시 업데이트 시도
+        updateMarkerFromPano();
+        
+        // 파노라마 위치 정보가 아직 업데이트되지 않았을 수 있으므로 짧은 딜레이 후 재시도
+        setTimeout(updateMarkerFromPano, 50);
+        setTimeout(updateMarkerFromPano, 150);
+        setTimeout(updateMarkerFromPano, 300);
+      });
+
+      // 파노라마 링크 변경 이벤트 (클릭으로 이동할 때 발생) - 보조 이벤트
       window.naver.maps.Event.addListener(pano, 'links_changed', () => {
         // 링크 변경 후 위치가 변경될 수 있으므로 짧은 딜레이 후 마커 업데이트
         setTimeout(() => {
@@ -748,17 +813,6 @@ const MapPane: React.FC<MapPaneProps> = ({
             
             // Sync Map Center - 미니맵 중앙으로 이동
             mapRef.current.setCenter(pos);
-            
-            // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
-            requestAnimationFrame(() => {
-              if (!mapRef.current) return;
-              
-              const currentPos = pano.getPosition();
-              if (currentPos && naverMarkerRef.current) {
-                naverMarkerRef.current.setPosition(currentPos);
-                naverMarkerRef.current.setMap(mapRef.current);
-              }
-            });
             
             // Sync Marker - 즉시 업데이트
             if (naverMarkerRef.current) {
@@ -780,8 +834,11 @@ const MapPane: React.FC<MapPaneProps> = ({
             
             // 방향 표시 폴리곤 업데이트
             createNaverDirectionPolygon(pos, angle, mapRef.current);
+            
+            // 거리뷰 상태 업데이트 (동기화를 위해)
+            onStreetViewChange({ lat: pos.lat(), lng: pos.lng(), active: true });
           }
-        }, 50);
+        }, 150);
       });
 
       // Sync Map & Marker when Panorama moves - 미니맵 중앙으로 이동
