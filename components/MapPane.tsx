@@ -2937,7 +2937,7 @@ const MapPane: React.FC<MapPaneProps> = ({
              : config.type === 'google'
                ? 'right-16'  // 구글맵 pegman 옆에 배치
                : config.type === 'naver'
-                 ? 'right-[50px]'  // 네이버맵: 거리뷰 버튼 옆에 배치
+                 ? 'right-4'  // 네이버맵: 오른쪽 상단 (거리뷰 버튼과 위치 교체)
                  : 'right-4'   // 카카오맵
          }`}
          title="전체화면"

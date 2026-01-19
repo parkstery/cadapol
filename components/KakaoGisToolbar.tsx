@@ -23,13 +23,6 @@ const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction,
   return (
     <div className={`absolute top-4 ${toolbarRight} z-20 flex bg-white rounded-md shadow-lg border border-gray-300 overflow-hidden`}>
       <button 
-        onClick={onClear}
-        title="초기화"
-        className="w-9 h-8 flex items-center justify-center border-r border-gray-100 text-red-500 hover:bg-red-50 transition-colors"
-      >
-        🗑️
-      </button>
-      <button 
         onClick={onToggleCadastral}
         title="지적도"
         className="w-9 h-8 flex items-center justify-center border-r border-gray-100 hover:bg-gray-50 transition-colors"
@@ -49,6 +42,13 @@ const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction,
         className={`w-9 h-8 flex items-center justify-center border-r border-gray-100 transition-colors ${activeMode === GISMode.AREA ? 'bg-blue-100' : 'hover:bg-gray-50'}`}
       >
         📐
+      </button>
+      <button 
+        onClick={onClear}
+        title="초기화"
+        className="w-9 h-8 flex items-center justify-center border-r border-gray-100 text-red-500 hover:bg-red-50 transition-colors"
+      >
+        🗑️
       </button>
       {/* 로드뷰 버튼 (거리뷰 활성화 상태에서도 표시) */}
       <button
