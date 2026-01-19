@@ -317,7 +317,8 @@ const MapPane: React.FC<MapPaneProps> = ({
       zoomControl: true,
       streetViewControl: true,
       streetViewControlOptions: {
-        position: window.google.maps.ControlPosition.TOP_RIGHT
+        position: window.google.maps.ControlPosition.TOP_RIGHT,
+        style: window.google.maps.ControlStyle.DEFAULT
       },
       fullscreenControl: false,
       streetView: panorama,
@@ -520,21 +521,27 @@ const MapPane: React.FC<MapPaneProps> = ({
         zIndex: 1000
       });
       
-      // 방향 표시 폴리곤 생성
+      // 방향 표시 폴리곤 생성 (walker와 같은 위치 사용)
       if (angle !== undefined && map) {
+        // walker의 실제 position을 직접 사용하여 폴리곤 생성
         createKakaoDirectionPolygon(pos, angle, map);
       }
       
       // 지도 리사이즈 후 Walker 재표시 보장
       setTimeout(() => {
         if (kakaoGisRef.current.walkerOverlay && map) {
+          const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
           kakaoGisRef.current.walkerOverlay.setMap(null);
           kakaoGisRef.current.walkerOverlay.setMap(map);
-        }
-        // 폴리곤도 재표시
-        if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
+          // walker 재표시 후 폴리곤도 같은 위치로 재생성
+          if (walkerPos && angle !== undefined) {
+            createKakaoDirectionPolygon(walkerPos, angle, map);
+          }
+        } else if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
+          // walker가 없어도 폴리곤은 재표시
+          const polygonPos = pos; // 원래 위치 사용
           kakaoGisRef.current.directionPolygon.setMap(null);
-          createKakaoDirectionPolygon(pos, angle, map);
+          createKakaoDirectionPolygon(polygonPos, angle, map);
         }
       }, 150);
     };
@@ -571,8 +578,9 @@ const MapPane: React.FC<MapPaneProps> = ({
         zIndex: 1000
       });
       
-      // 방향 표시 폴리곤 생성
+      // 방향 표시 폴리곤 생성 (walker와 같은 위치 사용)
       if (angle !== undefined && map) {
+        // walker의 실제 position을 직접 사용하여 폴리곤 생성
         createKakaoDirectionPolygon(pos, angle, map);
       }
     };
@@ -1558,14 +1566,14 @@ const MapPane: React.FC<MapPaneProps> = ({
                     if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
                       kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
                       kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                      // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
+                      if (rvPos && viewpoint) {
+                        // walker의 실제 position을 직접 사용하여 폴리곤 생성
+                        createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
+                      }
                     }
                     if (mapRef.current) {
                       mapRef.current.setCenter(rvPos);
-                    }
-                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
-                    if (rvPos && mapRef.current && viewpoint) {
-                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
-                      createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
                   
@@ -1583,12 +1591,12 @@ const MapPane: React.FC<MapPaneProps> = ({
                       if (rvPos && mapRef.current) {
                         kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
                         kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                        // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
+                        if (viewpoint) {
+                          // walker의 실제 position을 직접 사용하여 폴리곤 생성
+                          createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
+                        }
                       }
-                    }
-                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
-                    if (rvPos && mapRef.current && viewpoint) {
-                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
-                      createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
                   
@@ -1978,11 +1986,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                 floatingOverlay.setPosition(mousePos);
                 const content = floatingOverlay.getContent();
                 if (content) {
-                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
                 }
             } else {
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
                 floatingOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
                     position: mousePos,
@@ -2036,7 +2044,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                     : 0;
                 
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:white; border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px;">${segmentLength}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:white; border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px;">${segmentLength}m</div>`;
                 const fixedOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
                     position: pos,
@@ -2097,7 +2105,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const content = document.createElement('div');
                 content.style.position = 'relative';
                 content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
-                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:3.6px 4.8px; border-radius:4px; font-size:8.4px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
                 content.appendChild(textCloseBtn);
                 content.appendChild(deleteBtn);
                 
@@ -2274,10 +2282,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                 // 플로우팅 오버레이 업데이트
                 if (floatingOverlay) {
                     floatingOverlay.setPosition(mousePos);
-                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
+                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
                 } else {
                     const content = document.createElement('div');
-                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
                     floatingOverlay = new window.kakao.maps.CustomOverlay({
                         map: map,
                         position: mousePos,
@@ -2369,7 +2377,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const content = document.createElement('div');
                     content.style.position = 'relative';
                     content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
-                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:3.6px 4.8px; border-radius:4px; font-size:8.4px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
                     content.appendChild(textCloseBtn);
                     content.appendChild(deleteBtn);
                     
@@ -2780,6 +2788,18 @@ const MapPane: React.FC<MapPaneProps> = ({
          </div>
       )}
 
+       {/* 구글맵 pegman 여백 스타일 */}
+       {config.type === 'google' && (
+         <style>{`
+           .gm-style .gm-control-active,
+           .gm-style .gm-fullscreen-control,
+           .gm-style .gm-svpc {
+             margin-top: 16px !important;
+             margin-right: 16px !important;
+           }
+         `}</style>
+       )}
+
        {/* 전체화면 버튼 - 모든 맵에서 우상단, 거리뷰 활성화 시 오른쪽으로 이동 */}
        <button 
          onClick={onToggleFullscreen}
@@ -2787,7 +2807,7 @@ const MapPane: React.FC<MapPaneProps> = ({
            isStreetViewActive 
              ? 'right-[50px]'  // 거리뷰 닫기(16px) + 간격(2px) + 버튼(32px) = 50px
              : config.type === 'google'
-               ? 'right-16'  // 구글맵 pegman 옆에 배치
+               ? 'right-4'  // 구글맵: 네이버맵과 유사하게 오른쪽 상단에 배치 (pegman과 간격 유지)
                : config.type === 'naver'
                  ? 'right-4'  // 네이버맵: 오른쪽 상단 (거리뷰 버튼과 위치 교체)
                  : 'right-4'   // 카카오맵
