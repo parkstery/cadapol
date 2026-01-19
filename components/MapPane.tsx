@@ -1303,17 +1303,8 @@ const MapPane: React.FC<MapPaneProps> = ({
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      // 에러 응답 확인 및 상세 로깅
-      if (data.response && data.response.status === 'ERROR') {
-        console.error("Step1: VWorld API Error", {
-          status: data.response.status,
-          error: data.response.error,
-          text: data.response.error?.text || 'Unknown error'
-        });
-        return;
-      }
-
-      if (data.response && data.response.status === 'OK' && data.response.result && data.response.result.featureCollection && data.response.result.featureCollection.features && data.response.result.featureCollection.features.length > 0) {
+      // Reference 코드와 동일한 형식으로 수정
+      if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         const pnu = feature.properties.pnu;
         
