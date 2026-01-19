@@ -68,6 +68,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     cadastralMarker?: any; // 지적 정보 조회 시 표시할 마커
     cadastralPolygon?: any; // 지적 경계 폴리곤
     cadastralOverlay?: any; // 지적 정보 인포윈도우
+    cadastralClickPos?: any; // 지적 정보 클릭 위치
   }>({
     rv: null,
     rvClient: null,
@@ -1290,87 +1291,28 @@ const MapPane: React.FC<MapPaneProps> = ({
         kakaoGisRef.current.cadastralPolygon = polygon;
         console.log("Cadastral polygon drawn successfully", paths.length, "points");
         
-        // 폴리곤 생성 후 infowindow 위치를 폴리곤 외부로 조정 (중첩되지 않는 가장 가까운 위치)
-        if (kakaoGisRef.current.cadastralOverlay) {
-          // 폴리곤의 중심점 계산
-          let centerLat = 0;
-          let centerLng = 0;
-          paths.forEach((path: any) => {
-            centerLat += path.getLat();
-            centerLng += path.getLng();
-          });
-          centerLat /= paths.length;
-          centerLng /= paths.length;
+        // 폴리곤 생성 후 infowindow 위치를 클릭한 위치의 상단 10px 지점에 표시
+        if (kakaoGisRef.current.cadastralOverlay && kakaoGisRef.current.cadastralClickPos) {
+          // 클릭한 위치의 위도/경도
+          const clickLat = kakaoGisRef.current.cadastralClickPos.getLat();
+          const clickLng = kakaoGisRef.current.cadastralClickPos.getLng();
           
-          // 폴리곤의 경계 박스 계산 (최대/최소 위도/경도)
-          let minLat = paths[0].getLat();
-          let maxLat = paths[0].getLat();
-          let minLng = paths[0].getLng();
-          let maxLng = paths[0].getLng();
-          paths.forEach((path: any) => {
-            const lat = path.getLat();
-            const lng = path.getLng();
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-            if (lng < minLng) minLng = lng;
-            if (lng > maxLng) maxLng = lng;
-          });
+          // 지도의 현재 줌 레벨 가져오기
+          const zoomLevel = currentMap.getLevel();
           
-          // 폴리곤의 크기 계산
-          const polygonHeight = maxLat - minLat;
-          const polygonWidth = maxLng - minLng;
+          // 줌 레벨에 따른 위도 오프셋 계산 (10px를 위도로 변환)
+          // 줌 레벨이 높을수록(숫자가 작을수록) 더 작은 오프셋 필요
+          // 대략적인 계산: 줌 레벨 1에서 위도 1도 ≈ 111km, 화면 256px
+          // 줌 레벨 N에서 1px ≈ (111km / 256) / (2^(N-1)) ≈ 0.0001 / (2^(N-1)) 도
+          // 10px ≈ 0.001 / (2^(N-1)) 도
+          // 간단하게 줌 레벨에 따라 조정: 줌 레벨이 높을수록(숫자가 작을수록) 더 큰 오프셋
+          const baseOffset = 0.0001; // 기본 오프셋 (약 11m)
+          const zoomFactor = Math.pow(2, Math.max(0, zoomLevel - 3)); // 줌 레벨에 따른 조정
+          const latOffset = baseOffset / zoomFactor; // 위도 오프셋 (상단이므로 위도 증가)
           
-          // infowindow 크기 추정 (더 작게 추정하여 가까운 위치에 배치)
-          const estimatedInfoWindowHeight = polygonHeight * 0.1;
-          const estimatedInfoWindowWidth = polygonWidth * 0.1;
-          
-          // 폴리곤 경계에서의 여유 공간 (폴리곤 크기의 2%로 줄여서 더 가까이 배치)
-          const margin = Math.max(polygonHeight, polygonWidth) * 0.02;
-          
-          // 4방향 후보 위치 계산 (위, 아래, 왼쪽, 오른쪽) - 더 가까운 위치에 배치
-          const candidates = [
-            // 위쪽: 폴리곤 위쪽 경계 + 여유 공간
-            { lat: maxLat + margin, lng: centerLng, distance: maxLat - centerLat + margin },
-            // 아래쪽: 폴리곤 아래쪽 경계 - 여유 공간
-            { lat: minLat - margin, lng: centerLng, distance: centerLat - minLat + margin },
-            // 오른쪽: 폴리곤 오른쪽 경계 + 여유 공간
-            { lat: centerLat, lng: maxLng + margin, distance: maxLng - centerLng + margin },
-            // 왼쪽: 폴리곤 왼쪽 경계 - 여유 공간
-            { lat: centerLat, lng: minLng - margin, distance: centerLng - minLng + margin }
-          ];
-          
-          // 가장 가까운 위치 선택 (거리 기준)
-          let bestPosition = candidates[0];
-          for (let i = 1; i < candidates.length; i++) {
-            if (candidates[i].distance < bestPosition.distance) {
-              bestPosition = candidates[i];
-            }
-          }
-          
-          // 선택된 위치가 폴리곤 경계 박스와 겹치지 않는지 확인
-          // infowindow가 폴리곤 경계 박스 밖에 있는지 확인 (여유 공간 포함)
-          const isOutside = 
-            (bestPosition.lat < minLat - margin || bestPosition.lat > maxLat + margin) ||
-            (bestPosition.lng < minLng - margin || bestPosition.lng > maxLng + margin);
-          
-          // 폴리곤 경계 박스 밖에 있지 않으면 가장 가까운 방향으로 더 멀리 이동
-          if (!isOutside) {
-            if (bestPosition.lat > centerLat) {
-              // 위쪽 방향
-              bestPosition.lat = maxLat + margin;
-            } else if (bestPosition.lat < centerLat) {
-              // 아래쪽 방향
-              bestPosition.lat = minLat - margin;
-            } else if (bestPosition.lng > centerLng) {
-              // 오른쪽 방향
-              bestPosition.lng = maxLng + margin;
-            } else {
-              // 왼쪽 방향
-              bestPosition.lng = minLng - margin;
-            }
-          }
-          
-          const infoWindowPos = new window.kakao.maps.LatLng(bestPosition.lat, bestPosition.lng);
+          // 클릭 위치의 상단 10px 지점에 배치
+          const infoWindowLat = clickLat + latOffset;
+          const infoWindowPos = new window.kakao.maps.LatLng(infoWindowLat, clickLng);
           
           // infowindow 위치 업데이트
           kakaoGisRef.current.cadastralOverlay.setPosition(infoWindowPos);
@@ -1397,6 +1339,9 @@ const MapPane: React.FC<MapPaneProps> = ({
 
       // 기존 지적 관련 그래픽 제거
       clearCadastralGraphics();
+      
+      // 클릭 위치 저장 (infowindow 위치 계산용)
+      kakaoGisRef.current.cadastralClickPos = pos;
 
       // 1. 마커 표시 제거 (요청사항: 마커가 표시되지 않도록)
 
@@ -2265,16 +2210,15 @@ const MapPane: React.FC<MapPaneProps> = ({
                 });
                 kakaoDrawingRef.current.overlays.push(totalOverlay);
                 
-                // 도형 삭제 버튼을 마지막 포인트 가까이 별도 오버레이로 배치
+                // 도형 삭제 버튼을 마지막 포인트에 인접하여 작은 'x' 버튼 형태로 배치
                 const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '🗑️';
-                deleteBtn.style.cssText = 'width:24px; height:24px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:14px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                deleteBtn.innerHTML = '✕';
+                deleteBtn.style.cssText = 'width:18px; height:18px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 0;';
                 deleteBtn.title = '측정 객체 삭제';
                 
-                // 마지막 포인트에서 약간 오프셋된 위치에 배치 (텍스트 박스와 중첩 방지)
-                // 텍스트 박스가 lastPos에 있으므로, 약간 위쪽으로 이동
+                // 마지막 포인트에 바로 인접하여 배치 (매우 작은 오프셋)
                 const deleteBtnPos = new window.kakao.maps.LatLng(
-                    lastPos.getLat() + 0.00005, // 약간 위로 이동
+                    lastPos.getLat() + 0.00001, // 매우 작은 오프셋으로 마지막 포인트에 인접
                     lastPos.getLng()
                 );
                 
@@ -2566,16 +2510,15 @@ const MapPane: React.FC<MapPaneProps> = ({
                     });
                     kakaoDrawingRef.current.overlays.push(areaOverlay);
                     
-                    // 도형 삭제 버튼을 마지막 포인트 가까이 별도 오버레이로 배치
+                    // 도형 삭제 버튼을 마지막 포인트에 인접하여 작은 'x' 버튼 형태로 배치
                     const deleteBtn = document.createElement('button');
-                    deleteBtn.innerHTML = '🗑️';
-                    deleteBtn.style.cssText = 'width:24px; height:24px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:14px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                    deleteBtn.innerHTML = '✕';
+                    deleteBtn.style.cssText = 'width:18px; height:18px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 0;';
                     deleteBtn.title = '측정 객체 삭제';
                     
-                    // 마지막 포인트에서 약간 오프셋된 위치에 배치 (텍스트 박스와 중첩 방지)
-                    // 텍스트 박스가 lastPos에 있으므로, 약간 위쪽으로 이동
+                    // 마지막 포인트에 바로 인접하여 배치 (매우 작은 오프셋)
                     const deleteBtnPos = new window.kakao.maps.LatLng(
-                        lastPos.getLat() + 0.00005, // 약간 위로 이동
+                        lastPos.getLat() + 0.00001, // 매우 작은 오프셋으로 마지막 포인트에 인접
                         lastPos.getLng()
                     );
                     
