@@ -491,9 +491,13 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // 카카오맵 Walker 생성 헬퍼 함수 (카카오맵 공식 walker 사용, 방향 동기화)
   const createKakaoWalker = useCallback((pos: any, map: any, angle?: number) => {
-    // 기존 Walker가 있으면 제거
+    // 기존 Walker가 있으면 완전히 제거 (중복 방지)
     if (kakaoGisRef.current.walkerOverlay) {
-      kakaoGisRef.current.walkerOverlay.setMap(null);
+      try {
+        kakaoGisRef.current.walkerOverlay.setMap(null);
+      } catch (e) {
+        // 이미 제거된 경우 무시
+      }
       kakaoGisRef.current.walkerOverlay = null;
     }
     
@@ -525,16 +529,23 @@ const MapPane: React.FC<MapPaneProps> = ({
         createKakaoDirectionPolygon(pos, angle, map);
       }
       
-      // 지도 리사이즈 후 Walker 재표시 보장
+      // 지도 리사이즈 후 Walker 재표시 보장 (중복 방지)
       setTimeout(() => {
+        // walker가 여전히 존재하고 같은 인스턴스인지 확인
         if (kakaoGisRef.current.walkerOverlay && map) {
-          // walker의 실제 position을 가져와서 폴리곤과 동기화
-          const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
-          kakaoGisRef.current.walkerOverlay.setMap(null);
-          kakaoGisRef.current.walkerOverlay.setMap(map);
-          // walker 재표시 후 폴리곤도 같은 위치로 재생성 (동기화 보장)
-          if (walkerPos && angle !== undefined) {
-            createKakaoDirectionPolygon(walkerPos, angle, map);
+          try {
+            // walker의 실제 position을 가져와서 폴리곤과 동기화
+            const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
+            if (walkerPos) {
+              // walker 재표시 (setMap을 다시 호출하지 않고 위치만 확인)
+              // 폴리곤만 재생성하여 동기화 보장
+              if (angle !== undefined) {
+                createKakaoDirectionPolygon(walkerPos, angle, map);
+              }
+            }
+          } catch (e) {
+            // walker가 이미 제거된 경우 무시
+            console.warn('Walker 재표시 중 오류:', e);
           }
         } else if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
           // walker가 없어도 폴리곤은 재표시
@@ -1538,21 +1549,18 @@ const MapPane: React.FC<MapPaneProps> = ({
                   const initialViewpoint = rv.getViewpoint();
                   const initialAngle = initialViewpoint ? initialViewpoint.pan : 0;
                   
-                  // Walker 생성 또는 업데이트 (초기 각도 포함)
-                  if (!kakaoGisRef.current.walkerOverlay) {
-                    createKakaoWalker(pos, mapRef.current, initialAngle);
-                  } else {
-                    kakaoGisRef.current.walkerOverlay.setPosition(pos);
-                    kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
-                    // 기존 walker의 각도도 업데이트
-                    const content = kakaoGisRef.current.walkerOverlay.getContent();
-                    if (content) {
-                      content.style.transformOrigin = 'center center';
-                      content.style.transform = `rotate(${initialAngle}deg)`;
+                  // Walker 생성 또는 업데이트 (초기 각도 포함, 중복 방지)
+                  // 기존 walker가 있으면 완전히 제거 후 재생성
+                  if (kakaoGisRef.current.walkerOverlay) {
+                    try {
+                      kakaoGisRef.current.walkerOverlay.setMap(null);
+                    } catch (e) {
+                      // 이미 제거된 경우 무시
                     }
-                    // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
-                    createKakaoDirectionPolygon(pos, initialAngle, mapRef.current);
+                    kakaoGisRef.current.walkerOverlay = null;
                   }
+                  // 새로운 walker 생성
+                  createKakaoWalker(pos, mapRef.current, initialAngle);
                   
                   // 위치 변경 이벤트 리스너 (중복 방지)
                   if (kakaoGisRef.current.rv) {
@@ -1728,13 +1736,21 @@ const MapPane: React.FC<MapPaneProps> = ({
             mapRef.current.setCenter(pos);
             mapRef.current.relayout(); // 리사이즈 보장
             
-            // Walker 업데이트 또는 생성 (로드뷰가 활성화되어 있을 때만)
+            // Walker 업데이트 또는 생성 (로드뷰가 활성화되어 있을 때만, 중복 방지)
             if (isStreetViewActive) {
               setTimeout(() => {
+                // walker가 이미 존재하면 위치만 업데이트
                 if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
-                  kakaoGisRef.current.walkerOverlay.setPosition(pos);
-                  kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                  try {
+                    kakaoGisRef.current.walkerOverlay.setPosition(pos);
+                    kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                  } catch (e) {
+                    // walker가 이미 제거된 경우 새로 생성
+                    kakaoGisRef.current.walkerOverlay = null;
+                    createKakaoWalker(pos, mapRef.current);
+                  }
                 } else if (mapRef.current) {
+                  // walker가 없으면 새로 생성
                   createKakaoWalker(pos, mapRef.current);
                 }
               }, 150);
@@ -2550,21 +2566,18 @@ const MapPane: React.FC<MapPaneProps> = ({
                    const initialViewpoint = rv.getViewpoint();
                    const initialAngle = initialViewpoint ? initialViewpoint.pan : 0;
                    
-                   // Walker 생성 또는 업데이트 (초기 각도 포함)
-                   if (!kakaoGisRef.current.walkerOverlay) {
-                     createKakaoWalker(pos, mapRef.current, initialAngle);
-                   } else {
-                     kakaoGisRef.current.walkerOverlay.setPosition(pos);
-                     kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
-                     // 기존 walker의 각도도 업데이트
-                     const content = kakaoGisRef.current.walkerOverlay.getContent();
-                     if (content) {
-                       content.style.transformOrigin = 'center center';
-                       content.style.transform = `rotate(${initialAngle}deg)`;
+                   // Walker 생성 또는 업데이트 (초기 각도 포함, 중복 방지)
+                   // 기존 walker가 있으면 완전히 제거 후 재생성
+                   if (kakaoGisRef.current.walkerOverlay) {
+                     try {
+                       kakaoGisRef.current.walkerOverlay.setMap(null);
+                     } catch (e) {
+                       // 이미 제거된 경우 무시
                      }
-                     // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
-                     createKakaoDirectionPolygon(pos, initialAngle, mapRef.current);
+                     kakaoGisRef.current.walkerOverlay = null;
                    }
+                   // 새로운 walker 생성
+                   createKakaoWalker(pos, mapRef.current, initialAngle);
                    
                    // 위치 변경 이벤트 리스너 (중복 방지)
                    if (kakaoGisRef.current.rv) {
