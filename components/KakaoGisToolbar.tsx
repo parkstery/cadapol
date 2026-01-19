@@ -16,7 +16,7 @@ const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction,
   // 버튼 너비: 약 32px (p-1.5 + 아이콘)
   // 툴바 너비: 5개 버튼 × 36px = 180px
   // 간격: 2px
-  const toolbarRight = isStreetViewActive ? 'right-[228px]' : 'right-[198px]'; // 전체화면 버튼 왼쪽에 2px 간격
+  const toolbarRight = isStreetViewActive ? 'right-[230px]' : 'right-[198px]'; // 전체화면 버튼 왼쪽에 2px 간격
   
   return (
     <div className={`absolute top-4 ${toolbarRight} z-20 flex bg-white rounded-md shadow-lg border border-gray-300 overflow-hidden`}>
