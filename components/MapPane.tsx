@@ -528,16 +528,11 @@ const MapPane: React.FC<MapPaneProps> = ({
       // 지도 리사이즈 후 Walker 재표시 보장
       setTimeout(() => {
         if (kakaoGisRef.current.walkerOverlay && map) {
-          // walker의 실제 position을 가져와서 폴리곤과 동기화
-          const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
           kakaoGisRef.current.walkerOverlay.setMap(null);
           kakaoGisRef.current.walkerOverlay.setMap(map);
-          // walker 재표시 후 폴리곤도 같은 위치로 재생성
-          if (walkerPos && angle !== undefined) {
-            createKakaoDirectionPolygon(walkerPos, angle, map);
-          }
-        } else if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
-          // walker가 없어도 폴리곤은 재표시
+        }
+        // 폴리곤도 재표시
+        if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
           kakaoGisRef.current.directionPolygon.setMap(null);
           createKakaoDirectionPolygon(pos, angle, map);
         }
@@ -1044,7 +1039,8 @@ const MapPane: React.FC<MapPaneProps> = ({
       window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', () => {
         handleUpdate();
         // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
-        if (kakaoGisRef.current.polygonState && mapRef.current) {
+        // 로드뷰가 활성화되어 있을 때만 폴리곤 재생성
+        if (isStreetViewActive && kakaoGisRef.current.polygonState && mapRef.current) {
           const { pos, angle } = kakaoGisRef.current.polygonState;
           createKakaoDirectionPolygon(pos, angle, mapRef.current);
         }
@@ -1546,11 +1542,9 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 기존 walker의 각도도 업데이트
                     const content = kakaoGisRef.current.walkerOverlay.getContent();
                     if (content) {
-                      content.style.transformOrigin = 'center center';
+                      content.style.transformOrigin = 'center bottom';
                       content.style.transform = `rotate(${initialAngle}deg)`;
                     }
-                    // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
-                    createKakaoDirectionPolygon(pos, initialAngle, mapRef.current);
                   }
                   
                   // 위치 변경 이벤트 리스너 (중복 방지)
@@ -1565,13 +1559,14 @@ const MapPane: React.FC<MapPaneProps> = ({
                     if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
                       kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
                       kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
-                      // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
-                      if (rvPos && viewpoint) {
-                        createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
-                      }
                     }
                     if (mapRef.current) {
                       mapRef.current.setCenter(rvPos);
+                    }
+                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
+                    if (rvPos && mapRef.current && viewpoint) {
+                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
+                      createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
                   
@@ -1589,11 +1584,12 @@ const MapPane: React.FC<MapPaneProps> = ({
                       if (rvPos && mapRef.current) {
                         kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
                         kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
-                        // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
-                        if (viewpoint) {
-                          createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
-                        }
                       }
+                    }
+                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
+                    if (rvPos && mapRef.current && viewpoint) {
+                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
+                      createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
                   
@@ -1728,15 +1724,17 @@ const MapPane: React.FC<MapPaneProps> = ({
             mapRef.current.setCenter(pos);
             mapRef.current.relayout(); // 리사이즈 보장
             
-            // Walker 업데이트 또는 생성
-            setTimeout(() => {
-              if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
-                kakaoGisRef.current.walkerOverlay.setPosition(pos);
-                kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
-              } else if (mapRef.current) {
-                createKakaoWalker(pos, mapRef.current);
-              }
-            }, 150);
+            // Walker 업데이트 또는 생성 (로드뷰가 활성화되어 있을 때만)
+            if (isStreetViewActive) {
+              setTimeout(() => {
+                if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
+                  kakaoGisRef.current.walkerOverlay.setPosition(pos);
+                  kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                } else if (mapRef.current) {
+                  createKakaoWalker(pos, mapRef.current);
+                }
+              }, 150);
+            }
           }
         });
       } else if (config.type === 'naver' && naverPanoramaRef.current) {
@@ -1983,7 +1981,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                 floatingOverlay.setPosition(mousePos);
                 const content = floatingOverlay.getContent();
                 if (content) {
-                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
                 }
             } else {
                 const content = document.createElement('div');
@@ -2041,7 +2039,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                     : 0;
                 
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:white; border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px;">${segmentLength}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:white; border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px;">${segmentLength}m</div>`;
                 const fixedOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
                     position: pos,
@@ -2102,7 +2100,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const content = document.createElement('div');
                 content.style.position = 'relative';
                 content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
-                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:3.6px 4.8px; border-radius:4px; font-size:8.4px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
                 content.appendChild(textCloseBtn);
                 content.appendChild(deleteBtn);
                 
@@ -2279,10 +2277,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                 // 플로우팅 오버레이 업데이트
                 if (floatingOverlay) {
                     floatingOverlay.setPosition(mousePos);
-                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
+                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
                 } else {
                     const content = document.createElement('div');
-                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
                     floatingOverlay = new window.kakao.maps.CustomOverlay({
                         map: map,
                         position: mousePos,
@@ -2374,7 +2372,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const content = document.createElement('div');
                     content.style.position = 'relative';
                     content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
-                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:3.6px 4.8px; border-radius:4px; font-size:8.4px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
                     content.appendChild(textCloseBtn);
                     content.appendChild(deleteBtn);
                     
@@ -2688,6 +2686,8 @@ const MapPane: React.FC<MapPaneProps> = ({
               kakaoGisRef.current.directionPolygon.setMap(null);
               kakaoGisRef.current.directionPolygon = null;
           }
+          // polygonState 초기화 (줌 변경 시 폴리곤이 재생성되지 않도록)
+          kakaoGisRef.current.polygonState = null;
           mapRef.current.setCursor('default');
           setGisMode(GISMode.DEFAULT);
       }
