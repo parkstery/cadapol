@@ -654,6 +654,11 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   const initNaverPanorama = (container: HTMLDivElement, latlng: any, map: any) => {
     try {
+      // 기존 파노라마의 이벤트 리스너 제거 (중복 방지)
+      if (naverPanoramaRef.current) {
+        window.naver.maps.Event.clearInstanceListeners(naverPanoramaRef.current);
+      }
+      
       // 컨테이너 스타일 확인 및 조정 (전체 영역 채우기 보장)
       if (container) {
         container.style.position = 'absolute';
@@ -780,8 +785,10 @@ const MapPane: React.FC<MapPaneProps> = ({
       });
 
       // Sync Map & Marker when Panorama moves - 미니맵 중앙으로 이동
-      window.naver.maps.Event.addListener(pano, 'position_changed', () => {
+      const positionChangedListener = () => {
         const pos = pano.getPosition();
+        if (!pos) return;
+        
         const lat = pos.lat();
         const lng = pos.lng();
         const pov = pano.getPov();
@@ -793,21 +800,10 @@ const MapPane: React.FC<MapPaneProps> = ({
         // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
         if (mapRef.current) {
           mapRef.current.setCenter(pos);
-          
-          // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
-          requestAnimationFrame(() => {
-            if (!mapRef.current || !naverMarkerRef.current) return;
-            
-            // 마커 위치를 다시 확인하고 업데이트 (중앙 유지 보장)
-            const currentPos = pano.getPosition();
-            if (currentPos) {
-              naverMarkerRef.current.setPosition(currentPos);
-              naverMarkerRef.current.setMap(mapRef.current);
-            }
-          });
         }
         
         // Sync Marker - 미니맵 중앙에 위치 (삼각형 마커, 방향 동기화)
+        // 즉시 업데이트 (비동기 처리 보완)
         if (naverMarkerRef.current && mapRef.current) {
           // 마커 위치를 중앙으로 업데이트
           naverMarkerRef.current.setPosition(pos);
@@ -828,11 +824,25 @@ const MapPane: React.FC<MapPaneProps> = ({
             angle: angle
           });
         }
+        
+        // setCenter 후 마커 위치를 다시 확인하고 업데이트 (중앙 유지 보장)
+        requestAnimationFrame(() => {
+          if (!mapRef.current || !naverMarkerRef.current) return;
+          
+          const currentPos = pano.getPosition();
+          if (currentPos) {
+            naverMarkerRef.current.setPosition(currentPos);
+            naverMarkerRef.current.setMap(mapRef.current);
+          }
+        });
+        
         // 방향 표시 폴리곤 생성/업데이트
         if (mapRef.current) {
           createNaverDirectionPolygon(pos, angle, mapRef.current);
         }
-      });
+      };
+      
+      window.naver.maps.Event.addListener(pano, 'position_changed', positionChangedListener);
 
       // 파노라마 시점 변경 이벤트 (방향 업데이트 및 동기화)
       window.naver.maps.Event.addListener(pano, 'pov_changed', () => {
@@ -1420,35 +1430,38 @@ const MapPane: React.FC<MapPaneProps> = ({
                 if (!naverPanoramaRef.current) {
                   initNaverPanorama(container, latlng, mapRef.current);
                 } else {
+                  // 기존 파노라마 위치 업데이트
                   naverPanoramaRef.current.setPosition(latlng);
-                  window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
-                }
-                
-                // 미니맵 중앙으로 이동
-                mapRef.current.setCenter(latlng);
-                
-                // Marker 생성 또는 업데이트 (삼각형 마커, 방향 표시)
-                const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
-                const angle = pov ? pov.pan : 0;
-                if (!naverMarkerRef.current) {
-                  const icon = createNaverTriangleMarker(angle);
-                  naverMarkerRef.current = new window.naver.maps.Marker({
-                    position: latlng,
-                    map: mapRef.current,
-                    icon: icon,
-                    angle: angle
-                  });
-                } else {
-                  naverMarkerRef.current.setMap(mapRef.current);
-                  naverMarkerRef.current.setPosition(latlng);
-                  naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
-                  if (typeof naverMarkerRef.current.setAngle === 'function') {
-                    naverMarkerRef.current.setAngle(angle);
+                  
+                  // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
+                  if (mapRef.current) {
+                    mapRef.current.setCenter(latlng);
+                    
+                    const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
+                    const angle = pov ? pov.pan : 0;
+                    
+                    if (naverMarkerRef.current) {
+                      naverMarkerRef.current.setPosition(latlng);
+                      naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+                      if (typeof naverMarkerRef.current.setAngle === 'function') {
+                        naverMarkerRef.current.setAngle(angle);
+                      }
+                      naverMarkerRef.current.setMap(mapRef.current);
+                    } else {
+                      const icon = createNaverTriangleMarker(angle);
+                      naverMarkerRef.current = new window.naver.maps.Marker({
+                        position: latlng,
+                        map: mapRef.current,
+                        icon: icon,
+                        angle: angle
+                      });
+                    }
+                    
+                    // 방향 표시 폴리곤 생성/업데이트
+                    createNaverDirectionPolygon(latlng, angle, mapRef.current);
                   }
-                }
-                // 방향 표시 폴리곤 생성/업데이트
-                if (mapRef.current) {
-                  createNaverDirectionPolygon(latlng, angle, mapRef.current);
+                  
+                  window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
                 }
               }
             }, 200);
@@ -1464,42 +1477,43 @@ const MapPane: React.FC<MapPaneProps> = ({
               }
             }, 200);
           } else {
+            // 기존 파노라마 위치 업데이트
             naverPanoramaRef.current.setPosition(latlng);
+            
+            // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
+            if (mapRef.current) {
+              mapRef.current.setCenter(latlng);
+              
+              const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
+              const angle = pov ? pov.pan : 0;
+              
+              if (naverMarkerRef.current) {
+                naverMarkerRef.current.setPosition(latlng);
+                naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+                if (typeof naverMarkerRef.current.setAngle === 'function') {
+                  naverMarkerRef.current.setAngle(angle);
+                }
+                naverMarkerRef.current.setMap(mapRef.current);
+              } else {
+                const icon = createNaverTriangleMarker(angle);
+                naverMarkerRef.current = new window.naver.maps.Marker({
+                  position: latlng,
+                  map: mapRef.current,
+                  icon: icon,
+                  angle: angle
+                });
+              }
+              
+              // 방향 표시 폴리곤 생성/업데이트
+              createNaverDirectionPolygon(latlng, angle, mapRef.current);
+            }
+            
             setTimeout(() => {
               if (naverPanoramaRef.current) {
                 window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
               }
             }, 100);
           }
-          
-          // 미니맵 중앙으로 이동
-          mapRef.current.setCenter(latlng);
-          
-          // Marker 생성 또는 업데이트 (삼각형 마커, 방향 표시) - 파노라마 초기화 후
-          setTimeout(() => {
-            const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
-            const angle = pov ? pov.pan : 0;
-            if (!naverMarkerRef.current) {
-              const icon = createNaverTriangleMarker(angle);
-              naverMarkerRef.current = new window.naver.maps.Marker({
-                position: latlng,
-                map: mapRef.current,
-                icon: icon,
-                angle: angle
-              });
-            } else {
-              naverMarkerRef.current.setMap(mapRef.current);
-              naverMarkerRef.current.setPosition(latlng);
-              naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
-              if (typeof naverMarkerRef.current.setAngle === 'function') {
-                naverMarkerRef.current.setAngle(angle);
-              }
-            }
-            // 방향 표시 폴리곤 생성/업데이트
-            if (mapRef.current) {
-              createNaverDirectionPolygon(latlng, angle, mapRef.current);
-            }
-          }, 300);
         }, 150);
       }
     } else {
@@ -1593,36 +1607,42 @@ const MapPane: React.FC<MapPaneProps> = ({
                                     if (!naverPanoramaRef.current) {
                                         initNaverPanorama(container, latlng, map);
                                     } else {
+                                        // 기존 파노라마 위치 업데이트
                                         naverPanoramaRef.current.setPosition(latlng);
+                                        
+                                        // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
+                                        if (mapRef.current) {
+                                            mapRef.current.setCenter(latlng);
+                                            
+                                            const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
+                                            const angle = pov ? pov.pan : 0;
+                                            
+                                            if (naverMarkerRef.current) {
+                                                naverMarkerRef.current.setPosition(latlng);
+                                                naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+                                                if (typeof naverMarkerRef.current.setAngle === 'function') {
+                                                    naverMarkerRef.current.setAngle(angle);
+                                                }
+                                                naverMarkerRef.current.setMap(mapRef.current);
+                                            } else {
+                                                const icon = createNaverTriangleMarker(angle);
+                                                naverMarkerRef.current = new window.naver.maps.Marker({
+                                                    position: latlng,
+                                                    map: mapRef.current,
+                                                    icon: icon,
+                                                    angle: angle
+                                                });
+                                            }
+                                            
+                                            // 방향 표시 폴리곤 생성/업데이트
+                                            createNaverDirectionPolygon(latlng, angle, mapRef.current);
+                                        }
+                                        
                                         window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
                                     }
                                     
                                     // 거리뷰 상태 업데이트 (동기화를 위해)
                                     onStreetViewChange({ lat: latlng.lat(), lng: latlng.lng(), active: true });
-                                    
-                                    // Marker 생성 또는 업데이트 (삼각형 마커, 방향 표시)
-                                    const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
-                                    const angle = pov ? pov.pan : 0;
-                                    if (!naverMarkerRef.current) {
-                                        const icon = createNaverTriangleMarker(angle);
-                                        naverMarkerRef.current = new window.naver.maps.Marker({
-                                            position: latlng,
-                                            map: mapRef.current,
-                                            icon: icon,
-                                            angle: angle
-                                        });
-                                    } else {
-                                        naverMarkerRef.current.setMap(mapRef.current);
-                                        naverMarkerRef.current.setPosition(latlng);
-                                        naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
-                                        if (typeof naverMarkerRef.current.setAngle === 'function') {
-                                            naverMarkerRef.current.setAngle(angle);
-                                        }
-                                    }
-                                    // 방향 표시 폴리곤 생성/업데이트
-                                    if (mapRef.current) {
-                                        createNaverDirectionPolygon(latlng, angle, mapRef.current);
-                                    }
                                 }
                             }, 200);
                             return;
@@ -1640,6 +1660,35 @@ const MapPane: React.FC<MapPaneProps> = ({
                         } else {
                             // 기존 파노라마 위치 업데이트
                             naverPanoramaRef.current.setPosition(latlng);
+                            
+                            // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
+                            if (mapRef.current) {
+                                mapRef.current.setCenter(latlng);
+                                
+                                const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
+                                const angle = pov ? pov.pan : 0;
+                                
+                                if (naverMarkerRef.current) {
+                                    naverMarkerRef.current.setPosition(latlng);
+                                    naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+                                    if (typeof naverMarkerRef.current.setAngle === 'function') {
+                                        naverMarkerRef.current.setAngle(angle);
+                                    }
+                                    naverMarkerRef.current.setMap(mapRef.current);
+                                } else {
+                                    const icon = createNaverTriangleMarker(angle);
+                                    naverMarkerRef.current = new window.naver.maps.Marker({
+                                        position: latlng,
+                                        map: mapRef.current,
+                                        icon: icon,
+                                        angle: angle
+                                    });
+                                }
+                                
+                                // 방향 표시 폴리곤 생성/업데이트
+                                createNaverDirectionPolygon(latlng, angle, mapRef.current);
+                            }
+                            
                             // 리사이즈 이벤트 트리거
                             setTimeout(() => {
                                 if (naverPanoramaRef.current) {
@@ -1650,32 +1699,6 @@ const MapPane: React.FC<MapPaneProps> = ({
 
                         // 거리뷰 상태 업데이트 (동기화를 위해)
                         onStreetViewChange({ lat: latlng.lat(), lng: latlng.lng(), active: true });
-                        
-                        // Create Marker on Map if not exists - 미니맵 중앙에 위치 (삼각형 마커, 방향 표시) - 파노라마 초기화 후
-                        setTimeout(() => {
-                            const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
-                            const angle = pov ? pov.pan : 0;
-                            if (!naverMarkerRef.current) {
-                                const icon = createNaverTriangleMarker(angle);
-                                naverMarkerRef.current = new window.naver.maps.Marker({
-                                    position: latlng,
-                                    map: mapRef.current,
-                                    icon: icon,
-                                    angle: angle
-                                });
-                            } else {
-                                naverMarkerRef.current.setMap(mapRef.current);
-                                naverMarkerRef.current.setPosition(latlng);
-                                naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
-                                if (typeof naverMarkerRef.current.setAngle === 'function') {
-                                    naverMarkerRef.current.setAngle(angle);
-                                }
-                            }
-                            // 방향 표시 폴리곤 생성/업데이트
-                            if (mapRef.current) {
-                                createNaverDirectionPolygon(latlng, angle, mapRef.current);
-                            }
-                        }, 300);
                     } catch (error) {
                         console.error('Naver Panorama 생성 오류:', error);
                         setIsStreetViewActive(false);
