@@ -3282,11 +3282,15 @@ const MapPane: React.FC<MapPaneProps> = ({
         />
       )}
 
-      {/* 🆕 길찾기 버튼 */}
+      {/* 🆕 길찾기 버튼 - KakaoGisToolbar와 겹치지 않도록 위치 조정 */}
       {sdkLoaded && (config.type === 'google' || config.type === 'kakao') && (
         <button
           onClick={() => setIsRoutingPanelOpen(!isRoutingPanelOpen)}
-          className={`absolute top-4 ${isStreetViewActive ? 'right-4' : 'right-[50px]'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
+          className={`absolute top-4 ${
+            config.type === 'kakao' 
+              ? (isStreetViewActive ? 'right-[240px]' : 'right-[210px]') // KakaoGisToolbar(180px) + 간격(30px)
+              : (isStreetViewActive ? 'right-4' : 'right-[50px]') // Google Maps는 기존 위치 유지
+          } z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
             isRoutingPanelOpen
               ? 'bg-blue-600 text-white border-blue-700'
               : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'

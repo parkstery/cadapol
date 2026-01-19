@@ -46,13 +46,25 @@ export class CadastralLayer implements Layer {
 
   show(): void {
     this.visible = true;
-    // 레이어가 이미 표시된 경우에는 아무것도 하지 않음
-    // 실제 표시는 사용자가 지도를 클릭할 때 fetchCadastralInfo가 호출됨
+    // 클릭 리스너 설정 (기존 기능과 충돌 방지하기 위해 show()에서만 설정)
+    if (this.mapInstance && window.kakao) {
+      this.setupMapClickListener();
+    }
   }
 
   hide(): void {
     this.visible = false;
     this.clearGraphics();
+    
+    // 클릭 리스너 제거 (기존 기능 복구)
+    if (this.mapInstance && window.kakao && (this.mapInstance as any).__cadastralClickListener) {
+      window.kakao.maps.event.removeListener(
+        this.mapInstance,
+        'click',
+        (this.mapInstance as any).__cadastralClickListener
+      );
+      (this.mapInstance as any).__cadastralClickListener = null;
+    }
   }
 
   isVisible(): boolean {
@@ -104,8 +116,8 @@ export class CadastralLayer implements Layer {
       return;
     }
 
-    // 지도 클릭 이벤트 리스너 설정
-    this.setupMapClickListener();
+    // visible이 true일 때만 클릭 리스너 설정 (기존 기능과 충돌 방지)
+    // 클릭 리스너는 show() 메서드에서 설정됨
   }
 
   detachFromMap(): void {
