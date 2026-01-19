@@ -317,8 +317,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       zoomControl: true,
       streetViewControl: true,
       streetViewControlOptions: {
-        position: window.google.maps.ControlPosition.TOP_RIGHT,
-        style: window.google.maps.ControlStyle.DEFAULT
+        position: window.google.maps.ControlPosition.TOP_RIGHT
       },
       fullscreenControl: false,
       streetView: panorama,
@@ -521,15 +520,15 @@ const MapPane: React.FC<MapPaneProps> = ({
         zIndex: 1000
       });
       
-      // 방향 표시 폴리곤 생성 (walker와 같은 위치 사용)
+      // 방향 표시 폴리곤 생성
       if (angle !== undefined && map) {
-        // walker의 실제 position을 직접 사용하여 폴리곤 생성
         createKakaoDirectionPolygon(pos, angle, map);
       }
       
       // 지도 리사이즈 후 Walker 재표시 보장
       setTimeout(() => {
         if (kakaoGisRef.current.walkerOverlay && map) {
+          // walker의 실제 position을 가져와서 폴리곤과 동기화
           const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
           kakaoGisRef.current.walkerOverlay.setMap(null);
           kakaoGisRef.current.walkerOverlay.setMap(map);
@@ -539,9 +538,8 @@ const MapPane: React.FC<MapPaneProps> = ({
           }
         } else if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
           // walker가 없어도 폴리곤은 재표시
-          const polygonPos = pos; // 원래 위치 사용
           kakaoGisRef.current.directionPolygon.setMap(null);
-          createKakaoDirectionPolygon(polygonPos, angle, map);
+          createKakaoDirectionPolygon(pos, angle, map);
         }
       }, 150);
     };
@@ -578,9 +576,8 @@ const MapPane: React.FC<MapPaneProps> = ({
         zIndex: 1000
       });
       
-      // 방향 표시 폴리곤 생성 (walker와 같은 위치 사용)
+      // 방향 표시 폴리곤 생성
       if (angle !== undefined && map) {
-        // walker의 실제 position을 직접 사용하여 폴리곤 생성
         createKakaoDirectionPolygon(pos, angle, map);
       }
     };
@@ -1549,9 +1546,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 기존 walker의 각도도 업데이트
                     const content = kakaoGisRef.current.walkerOverlay.getContent();
                     if (content) {
-                      content.style.transformOrigin = 'center bottom';
+                      content.style.transformOrigin = 'center center';
                       content.style.transform = `rotate(${initialAngle}deg)`;
                     }
+                    // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
+                    createKakaoDirectionPolygon(pos, initialAngle, mapRef.current);
                   }
                   
                   // 위치 변경 이벤트 리스너 (중복 방지)
@@ -1568,7 +1567,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                       kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
                       // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
                       if (rvPos && viewpoint) {
-                        // walker의 실제 position을 직접 사용하여 폴리곤 생성
                         createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                       }
                     }
@@ -1593,7 +1591,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                         kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
                         // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
                         if (viewpoint) {
-                          // walker의 실제 position을 직접 사용하여 폴리곤 생성
                           createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                         }
                       }
@@ -1990,7 +1987,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                 }
             } else {
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.4px 3.6px; border-radius:4px; font-size:7.2px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
                 floatingOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
                     position: mousePos,
@@ -2788,18 +2785,6 @@ const MapPane: React.FC<MapPaneProps> = ({
          </div>
       )}
 
-       {/* 구글맵 pegman 여백 스타일 */}
-       {config.type === 'google' && (
-         <style>{`
-           .gm-style .gm-control-active,
-           .gm-style .gm-fullscreen-control,
-           .gm-style .gm-svpc {
-             margin-top: 16px !important;
-             margin-right: 16px !important;
-           }
-         `}</style>
-       )}
-
        {/* 전체화면 버튼 - 모든 맵에서 우상단, 거리뷰 활성화 시 오른쪽으로 이동 */}
        <button 
          onClick={onToggleFullscreen}
@@ -2807,7 +2792,7 @@ const MapPane: React.FC<MapPaneProps> = ({
            isStreetViewActive 
              ? 'right-[50px]'  // 거리뷰 닫기(16px) + 간격(2px) + 버튼(32px) = 50px
              : config.type === 'google'
-               ? 'right-4'  // 구글맵: 네이버맵과 유사하게 오른쪽 상단에 배치 (pegman과 간격 유지)
+               ? 'right-16'  // 구글맵 pegman 옆에 배치
                : config.type === 'naver'
                  ? 'right-4'  // 네이버맵: 오른쪽 상단 (거리뷰 버튼과 위치 교체)
                  : 'right-4'   // 카카오맵
