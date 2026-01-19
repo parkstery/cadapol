@@ -1652,8 +1652,8 @@ const MapPane: React.FC<MapPaneProps> = ({
                     path: [lastPoint, mousePos],
                     strokeWeight: 3,
                     strokeColor: '#FF3333',
-                    strokeOpacity: 0.5, // 반투명으로 플로우팅 표시
-                    strokeStyle: 'dashed', // 점선으로 플로우팅 표시
+                    strokeOpacity: 0.6, // 반투명으로 플로우팅 표시 (카카오맵 스타일)
+                    strokeStyle: 'solid', // 실선으로 플로우팅 표시 (카카오맵 스타일)
                     zIndex: 9 // 확정된 선보다 낮은 z-index
                 });
                 kakaoDrawingRef.current.polylines.push(floatingLine);
@@ -1767,13 +1767,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const closeBtn = document.createElement('button');
                 closeBtn.innerHTML = '✕';
                 closeBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
-                closeBtn.onclick = () => {
-                    if (currentLine) currentLine.setMap(null);
-                    fixedOverlays.forEach(o => o.setMap(null));
-                    if (floatingOverlay) floatingOverlay.setMap(null);
-                    map.setCursor('default');
-                    setGisMode(GISMode.DEFAULT);
-                };
                 
                 const content = document.createElement('div');
                 content.style.position = 'relative';
@@ -1788,6 +1781,51 @@ const MapPane: React.FC<MapPaneProps> = ({
                     zIndex: 100
                 });
                 kakaoDrawingRef.current.overlays.push(totalOverlay);
+                
+                // closeBtn의 onclick 설정 (totalOverlay 및 모든 참조 포함)
+                closeBtn.onclick = () => {
+                    // 폴리라인 삭제
+                    if (currentLine) {
+                        currentLine.setMap(null);
+                        // polylines 배열에서도 제거
+                        const index = kakaoDrawingRef.current.polylines.indexOf(currentLine);
+                        if (index > -1) {
+                            kakaoDrawingRef.current.polylines.splice(index, 1);
+                        }
+                    }
+                    // 모든 오버레이 삭제
+                    fixedOverlays.forEach(o => {
+                        o.setMap(null);
+                        const overlayIndex = kakaoDrawingRef.current.overlays.indexOf(o);
+                        if (overlayIndex > -1) {
+                            kakaoDrawingRef.current.overlays.splice(overlayIndex, 1);
+                        }
+                    });
+                    // 총 거리 오버레이도 삭제
+                    if (totalOverlay) {
+                        totalOverlay.setMap(null);
+                        const totalOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(totalOverlay);
+                        if (totalOverlayIndex > -1) {
+                            kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
+                        }
+                    }
+                    if (floatingOverlay) {
+                        floatingOverlay.setMap(null);
+                        const floatingIndex = kakaoDrawingRef.current.overlays.indexOf(floatingOverlay);
+                        if (floatingIndex > -1) {
+                            kakaoDrawingRef.current.overlays.splice(floatingIndex, 1);
+                        }
+                    }
+                    if (floatingLine) {
+                        floatingLine.setMap(null);
+                        const floatingLineIndex = kakaoDrawingRef.current.polylines.indexOf(floatingLine);
+                        if (floatingLineIndex > -1) {
+                            kakaoDrawingRef.current.polylines.splice(floatingLineIndex, 1);
+                        }
+                    }
+                    map.setCursor('default');
+                    setGisMode(GISMode.DEFAULT);
+                };
                 
                 map.setCursor('default');
                 currentLine = null;
@@ -1832,8 +1870,8 @@ const MapPane: React.FC<MapPaneProps> = ({
                         path: [lastPoint, mousePos],
                         strokeWeight: 3,
                         strokeColor: '#39f',
-                        strokeOpacity: 0.5, // 반투명으로 플로우팅 표시
-                        strokeStyle: 'dashed', // 점선으로 플로우팅 표시
+                        strokeOpacity: 0.6, // 반투명으로 플로우팅 표시 (카카오맵 스타일)
+                        strokeStyle: 'solid', // 실선으로 플로우팅 표시 (카카오맵 스타일)
                         zIndex: 9 // 확정된 폴리곤보다 낮은 z-index
                     });
                     kakaoDrawingRef.current.polylines.push(floatingLine);
@@ -1853,10 +1891,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                         path: tempPath,
                         strokeWeight: 3,
                         strokeColor: '#39f',
-                        strokeOpacity: 0.5, // 반투명으로 플로우팅 표시
-                        strokeStyle: 'dashed', // 점선으로 플로우팅 표시
+                        strokeOpacity: 0.6, // 반투명으로 플로우팅 표시 (카카오맵 스타일)
+                        strokeStyle: 'solid', // 실선으로 플로우팅 표시 (카카오맵 스타일)
                         fillColor: '#A2D4EC',
-                        fillOpacity: 0.2, // 매우 투명하게 플로우팅 표시
+                        fillOpacity: 0.25, // 반투명하게 플로우팅 표시 (카카오맵 스타일)
                         zIndex: 9 // 확정된 폴리곤보다 낮은 z-index
                     });
                     kakaoDrawingRef.current.polygons.push(floatingPoly);
@@ -1953,12 +1991,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const closeBtn = document.createElement('button');
                     closeBtn.innerHTML = '✕';
                     closeBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
-                    closeBtn.onclick = () => {
-                        if (currentPoly) currentPoly.setMap(null);
-                        if (floatingOverlay) floatingOverlay.setMap(null);
-                        map.setCursor('default');
-                        setGisMode(GISMode.DEFAULT);
-                    };
                     
                     const content = document.createElement('div');
                     content.style.position = 'relative';
@@ -1973,6 +2005,51 @@ const MapPane: React.FC<MapPaneProps> = ({
                         zIndex: 100
                     });
                     kakaoDrawingRef.current.overlays.push(areaOverlay);
+                    
+                    // closeBtn의 onclick 설정 (areaOverlay 및 모든 참조 포함)
+                    closeBtn.onclick = () => {
+                        // 폴리곤 삭제
+                        if (currentPoly) {
+                            currentPoly.setMap(null);
+                            // polygons 배열에서도 제거
+                            const index = kakaoDrawingRef.current.polygons.indexOf(currentPoly);
+                            if (index > -1) {
+                                kakaoDrawingRef.current.polygons.splice(index, 1);
+                            }
+                        }
+                        // 플로우팅 요소들 삭제
+                        if (floatingLine) {
+                            floatingLine.setMap(null);
+                            const floatingLineIndex = kakaoDrawingRef.current.polylines.indexOf(floatingLine);
+                            if (floatingLineIndex > -1) {
+                                kakaoDrawingRef.current.polylines.splice(floatingLineIndex, 1);
+                            }
+                        }
+                        if (floatingPoly) {
+                            floatingPoly.setMap(null);
+                            const floatingPolyIndex = kakaoDrawingRef.current.polygons.indexOf(floatingPoly);
+                            if (floatingPolyIndex > -1) {
+                                kakaoDrawingRef.current.polygons.splice(floatingPolyIndex, 1);
+                            }
+                        }
+                        if (floatingOverlay) {
+                            floatingOverlay.setMap(null);
+                            const floatingIndex = kakaoDrawingRef.current.overlays.indexOf(floatingOverlay);
+                            if (floatingIndex > -1) {
+                                kakaoDrawingRef.current.overlays.splice(floatingIndex, 1);
+                            }
+                        }
+                        // 면적 오버레이도 삭제
+                        if (areaOverlay) {
+                            areaOverlay.setMap(null);
+                            const areaOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(areaOverlay);
+                            if (areaOverlayIndex > -1) {
+                                kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
+                            }
+                        }
+                        map.setCursor('default');
+                        setGisMode(GISMode.DEFAULT);
+                    };
                     
                     currentPoly = null;
                     map.setCursor('default');
