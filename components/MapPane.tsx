@@ -69,6 +69,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     cadastralPolygon?: any; // 지적 경계 폴리곤
     cadastralOverlay?: any; // 지적 정보 인포윈도우
     cadastralClickPos?: any; // 지적 정보 클릭 위치
+    cadastralPNU?: string; // 지적 정보 PNU
   }>({
     rv: null,
     rvClient: null,
@@ -1160,6 +1161,33 @@ const MapPane: React.FC<MapPaneProps> = ({
         
         console.log("Step1: PNU retrieved", pnu);
         
+        // PNU 정보 저장 (infowindow 업데이트용)
+        kakaoGisRef.current.cadastralPNU = pnu;
+        
+        // infowindow에 PNU 정보 추가
+        if (kakaoGisRef.current.cadastralOverlay && pnu) {
+          const contentDiv = kakaoGisRef.current.cadastralOverlay.getContent();
+          if (contentDiv) {
+            // PNU 섹션 찾기 또는 생성
+            let pnuSection = contentDiv.querySelector('#cadastral-pnu-section');
+            if (!pnuSection) {
+              // PNU 섹션이 없으면 생성
+              pnuSection = document.createElement('div');
+              pnuSection.id = 'cadastral-pnu-section';
+              pnuSection.style.cssText = 'margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;';
+              
+              // 좌표 정보 섹션 뒤에 삽입
+              const coordSection = contentDiv.querySelector('div[style*="margin-top: 8px"]');
+              if (coordSection && coordSection.parentNode) {
+                coordSection.parentNode.insertBefore(pnuSection, coordSection.nextSibling);
+              }
+            }
+            
+            // PNU 정보 업데이트
+            pnuSection.innerHTML = `<div style="display:flex; justify-content:space-between;"><span>PNU</span> <span style="font-family: monospace; font-weight:600;">${pnu}</span></div>`;
+          }
+        }
+        
         // 2단계: PNU로 폴리곤 조회 호출
         if (pnu) {
           fetchGeometryByPNUStep2(pnu, currentMap);
@@ -1424,6 +1452,10 @@ const MapPane: React.FC<MapPaneProps> = ({
             <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
               <div style="display:flex; justify-content:space-between;"><span>X</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
               <div style="display:flex; justify-content:space-between;"><span>Y</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
+            </div>
+            
+            <div id="cadastral-pnu-section" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
+              <!-- PNU 정보는 fetchCadastralInfoStep1에서 추가됨 -->
             </div>
 
             <div style="
@@ -2210,10 +2242,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                 });
                 kakaoDrawingRef.current.overlays.push(totalOverlay);
                 
-                // 도형 삭제 버튼을 마지막 포인트에 인접하여 작은 'x' 버튼 형태로 배치
+                // 도형 삭제 버튼을 마지막 포인트에 인접하여 텍스트 박스 닫기 버튼과 같은 모양으로 배치
                 const deleteBtn = document.createElement('button');
                 deleteBtn.innerHTML = '✕';
-                deleteBtn.style.cssText = 'width:18px; height:18px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 0;';
+                deleteBtn.style.cssText = 'width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center;';
                 deleteBtn.title = '측정 객체 삭제';
                 
                 // 마지막 포인트에 바로 인접하여 배치 (매우 작은 오프셋)
@@ -2510,10 +2542,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                     });
                     kakaoDrawingRef.current.overlays.push(areaOverlay);
                     
-                    // 도형 삭제 버튼을 마지막 포인트에 인접하여 작은 'x' 버튼 형태로 배치
+                    // 도형 삭제 버튼을 마지막 포인트에 인접하여 텍스트 박스 닫기 버튼과 같은 모양으로 배치
                     const deleteBtn = document.createElement('button');
                     deleteBtn.innerHTML = '✕';
-                    deleteBtn.style.cssText = 'width:18px; height:18px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 0;';
+                    deleteBtn.style.cssText = 'width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000; display: flex; align-items: center; justify-content: center;';
                     deleteBtn.title = '측정 객체 삭제';
                     
                     // 마지막 포인트에 바로 인접하여 배치 (매우 작은 오프셋)
