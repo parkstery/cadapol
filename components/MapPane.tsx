@@ -1756,6 +1756,14 @@ const MapPane: React.FC<MapPaneProps> = ({
     if (isDragging.current) return;
     isProgrammaticUpdate.current = true;
     try {
+        // 좌표 유효성 검증
+        if (typeof globalState.lat !== 'number' || typeof globalState.lng !== 'number' || 
+            isNaN(globalState.lat) || isNaN(globalState.lng) || 
+            !isFinite(globalState.lat) || !isFinite(globalState.lng)) {
+          console.warn('Global State: 유효하지 않은 좌표', globalState);
+          return;
+        }
+        
         if (config.type === 'google') {
           mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
           mapRef.current.setZoom(globalState.zoom);
