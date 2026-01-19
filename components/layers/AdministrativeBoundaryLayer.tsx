@@ -69,10 +69,15 @@ export class AdministrativeBoundaryLayer implements Layer {
     }
     
     try {
-      // 지도 경계 가져오기
+      // 지도 경계 가져오기 (항상 현재 보이는 영역만 조회)
       const bounds = this.getMapBounds(mapInstance, mapProvider.getName());
       
-      // VWorld API로 행정경계 데이터 조회
+      if (!bounds) {
+        console.warn('AdministrativeBoundaryLayer: Cannot get map bounds');
+        return;
+      }
+      
+      // VWorld API로 행정경계 데이터 조회 (현재 보이는 영역만)
       const boundaries = await VWorldAPI.getAdministrativeBoundaries(this.level, bounds);
       
       // 맵 제공자별로 폴리곤 생성
