@@ -13,10 +13,13 @@ interface KakaoGisToolbarProps {
 const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction, onToggleCadastral, onClear, isStreetViewActive = false }) => {
   // 전체화면 버튼 위치에 따라 툴바 위치 조정
   // 전체화면 버튼: right-4 (16px) 또는 right-[50px] (거리뷰 활성화 시)
-  // 버튼 너비: 약 32px (p-1.5 + 아이콘)
+  // 전체화면 버튼 너비: 32px (p-1.5 패딩 6px × 2 + 아이콘 20px)
   // 툴바 너비: 5개 버튼 × 36px = 180px
-  // 간격: 2px
-  const toolbarRight = isStreetViewActive ? 'right-[232px]' : 'right-[198px]'; // 전체화면 버튼 왼쪽에 2px 간격
+  // 간격: 1px
+  // 계산: 전체화면 버튼 왼쪽 끝 - 1px 간격 = 툴바 오른쪽 끝
+  // 거리뷰 비활성화: (16px + 32px) - 1px = 47px, 툴바 right = 47px + 180px = 227px
+  // 거리뷰 활성화: (50px + 32px) - 1px = 81px, 툴바 right = 81px + 180px = 261px
+  const toolbarRight = isStreetViewActive ? 'right-[261px]' : 'right-[227px]'; // 전체화면 버튼 왼쪽에 1px 간격
   
   return (
     <div className={`absolute top-4 ${toolbarRight} z-20 flex bg-white rounded-md shadow-lg border border-gray-300 overflow-hidden`}>
