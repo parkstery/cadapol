@@ -470,9 +470,9 @@ const MapPane: React.FC<MapPaneProps> = ({
       map: map,
       path: path,
       strokeWeight: 0,
-      strokeColor: '#4A90E2',
+      strokeColor: '#e24a4a',
       strokeOpacity: 0,
-      fillColor: '#4A90E2',
+      fillColor: '##e24a4a',
       fillOpacity: 0.3, // 반투명 파란색
       zIndex: 999 // walker 아래에 표시
     });
@@ -1614,6 +1614,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     if (gisMode === GISMode.DISTANCE) {
         map.setCursor('crosshair');
         let currentLine: any = null;
+        let floatingLine: any = null; // 플로우팅 선 추가
         let floatingOverlay: any = null;
         let fixedOverlays: any[] = [];
         
@@ -1642,6 +1643,22 @@ const MapPane: React.FC<MapPaneProps> = ({
                 mousePos.getLat(), mousePos.getLng()
             ));
             
+            // 플로우팅 선 업데이트 (마우스 클릭 전까지 표시)
+            if (floatingLine) {
+                floatingLine.setPath([lastPoint, mousePos]);
+            } else {
+                floatingLine = new window.kakao.maps.Polyline({
+                    map: map,
+                    path: [lastPoint, mousePos],
+                    strokeWeight: 3,
+                    strokeColor: '#FF3333',
+                    strokeOpacity: 0.5, // 반투명으로 플로우팅 표시
+                    strokeStyle: 'dashed', // 점선으로 플로우팅 표시
+                    zIndex: 9 // 확정된 선보다 낮은 z-index
+                });
+                kakaoDrawingRef.current.polylines.push(floatingLine);
+            }
+            
             // 플로우팅 오버레이 업데이트
             if (floatingOverlay) {
                 floatingOverlay.setPosition(mousePos);
@@ -1665,6 +1682,12 @@ const MapPane: React.FC<MapPaneProps> = ({
         
         const handleClick = (e: any) => {
             const pos = e.latLng;
+            
+            // 플로우팅 선 제거 (클릭 시 확정)
+            if (floatingLine) {
+                floatingLine.setMap(null);
+                floatingLine = null;
+            }
             
             if (!currentLine) {
                 // 첫 번째 포인트
@@ -1719,13 +1742,22 @@ const MapPane: React.FC<MapPaneProps> = ({
                     map.setCursor('default');
                     currentLine.setMap(null);
                     currentLine = null;
+                    // 플로우팅 선 제거
+                    if (floatingLine) {
+                        floatingLine.setMap(null);
+                        floatingLine = null;
+                    }
                     return;
                 }
                 
                 const totalLength = Math.round(currentLine.getLength());
                 const lastPos = path[path.length - 1];
                 
-                // 플로우팅 오버레이 제거
+                // 플로우팅 선 및 오버레이 제거
+                if (floatingLine) {
+                    floatingLine.setMap(null);
+                    floatingLine = null;
+                }
                 if (floatingOverlay) {
                     floatingOverlay.setMap(null);
                     floatingOverlay = null;
@@ -1777,44 +1809,100 @@ const MapPane: React.FC<MapPaneProps> = ({
     else if (gisMode === GISMode.AREA) {
         map.setCursor('crosshair');
         let currentPoly: any = null;
+        let floatingLine: any = null; // 플로우팅 선 추가
+        let floatingPoly: any = null; // 플로우팅 폴리곤 추가
         let floatingOverlay: any = null;
         
         const updateFloatingArea = (mousePos: any) => {
             if (!currentPoly) return;
             
             const path = currentPoly.getPath();
-            if (path.length < 2) return;
+            if (path.length < 1) return;
             
-            // 마우스 위치를 포함한 임시 경로로 면적 계산
-            const tempPath = [...path, mousePos];
-            const tempPoly = new window.kakao.maps.Polygon({
-                path: tempPath,
-                strokeWeight: 0,
-                fillColor: 'transparent',
-                fillOpacity: 0
-            });
-            const area = Math.round(tempPoly.getArea());
+            // 첫 번째 포인트 이후부터 플로우팅 선 표시
+            if (path.length >= 1) {
+                const lastPoint = path[path.length - 1];
+                
+                // 플로우팅 선 업데이트 (마지막 포인트에서 마우스까지)
+                if (floatingLine) {
+                    floatingLine.setPath([lastPoint, mousePos]);
+                } else {
+                    floatingLine = new window.kakao.maps.Polyline({
+                        map: map,
+                        path: [lastPoint, mousePos],
+                        strokeWeight: 3,
+                        strokeColor: '#39f',
+                        strokeOpacity: 0.5, // 반투명으로 플로우팅 표시
+                        strokeStyle: 'dashed', // 점선으로 플로우팅 표시
+                        zIndex: 9 // 확정된 폴리곤보다 낮은 z-index
+                    });
+                    kakaoDrawingRef.current.polylines.push(floatingLine);
+                }
+            }
             
-            // 플로우팅 오버레이 업데이트
-            if (floatingOverlay) {
-                floatingOverlay.setPosition(mousePos);
-                floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
-            } else {
-                const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
-                floatingOverlay = new window.kakao.maps.CustomOverlay({
-                    map: map,
-                    position: mousePos,
-                    content: content,
-                    yAnchor: 2,
-                    zIndex: 100
+            // 두 번째 포인트 이후부터 플로우팅 폴리곤 표시
+            if (path.length >= 2) {
+                const tempPath = [...path, mousePos];
+                
+                // 플로우팅 폴리곤 업데이트
+                if (floatingPoly) {
+                    floatingPoly.setPath(tempPath);
+                } else {
+                    floatingPoly = new window.kakao.maps.Polygon({
+                        map: map,
+                        path: tempPath,
+                        strokeWeight: 3,
+                        strokeColor: '#39f',
+                        strokeOpacity: 0.5, // 반투명으로 플로우팅 표시
+                        strokeStyle: 'dashed', // 점선으로 플로우팅 표시
+                        fillColor: '#A2D4EC',
+                        fillOpacity: 0.2, // 매우 투명하게 플로우팅 표시
+                        zIndex: 9 // 확정된 폴리곤보다 낮은 z-index
+                    });
+                    kakaoDrawingRef.current.polygons.push(floatingPoly);
+                }
+                
+                // 마우스 위치를 포함한 임시 경로로 면적 계산
+                const tempPoly = new window.kakao.maps.Polygon({
+                    path: tempPath,
+                    strokeWeight: 0,
+                    fillColor: 'transparent',
+                    fillOpacity: 0
                 });
-                kakaoDrawingRef.current.overlays.push(floatingOverlay);
+                const area = Math.round(tempPoly.getArea());
+                
+                // 플로우팅 오버레이 업데이트
+                if (floatingOverlay) {
+                    floatingOverlay.setPosition(mousePos);
+                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
+                } else {
+                    const content = document.createElement('div');
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
+                    floatingOverlay = new window.kakao.maps.CustomOverlay({
+                        map: map,
+                        position: mousePos,
+                        content: content,
+                        yAnchor: 2,
+                        zIndex: 100
+                    });
+                    kakaoDrawingRef.current.overlays.push(floatingOverlay);
+                }
             }
         };
         
         const handleClick = (e: any) => {
             const pos = e.latLng;
+            
+            // 플로우팅 선 및 폴리곤 제거 (클릭 시 확정)
+            if (floatingLine) {
+                floatingLine.setMap(null);
+                floatingLine = null;
+            }
+            if (floatingPoly) {
+                floatingPoly.setMap(null);
+                floatingPoly = null;
+            }
+            
             if (!currentPoly) {
                 currentPoly = new window.kakao.maps.Polygon({
                     map: map,
@@ -1835,7 +1923,7 @@ const MapPane: React.FC<MapPaneProps> = ({
         };
         
         const handleMouseMove = (e: any) => {
-            if (currentPoly && currentPoly.getPath().length >= 2) {
+            if (currentPoly) {
                 updateFloatingArea(e.latLng);
             }
         };
@@ -1847,7 +1935,15 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const area = Math.round(currentPoly.getArea());
                     const lastPos = path[path.length - 1];
                     
-                    // 플로우팅 오버레이 제거
+                    // 플로우팅 선, 폴리곤 및 오버레이 제거
+                    if (floatingLine) {
+                        floatingLine.setMap(null);
+                        floatingLine = null;
+                    }
+                    if (floatingPoly) {
+                        floatingPoly.setMap(null);
+                        floatingPoly = null;
+                    }
                     if (floatingOverlay) {
                         floatingOverlay.setMap(null);
                         floatingOverlay = null;
