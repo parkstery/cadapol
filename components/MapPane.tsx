@@ -1290,7 +1290,7 @@ const MapPane: React.FC<MapPaneProps> = ({
         kakaoGisRef.current.cadastralPolygon = polygon;
         console.log("Cadastral polygon drawn successfully", paths.length, "points");
         
-        // 폴리곤 생성 후 infowindow 위치를 폴리곤 외부로 조정
+        // 폴리곤 생성 후 infowindow 위치를 폴리곤 외부로 조정 (중첩되지 않는 가장 가까운 위치)
         if (kakaoGisRef.current.cadastralOverlay) {
           // 폴리곤의 중심점 계산
           let centerLat = 0;
@@ -1316,12 +1316,63 @@ const MapPane: React.FC<MapPaneProps> = ({
             if (lng > maxLng) maxLng = lng;
           });
           
-          // 폴리곤의 높이 계산 (위도 차이)
+          // 폴리곤의 크기 계산
           const polygonHeight = maxLat - minLat;
+          const polygonWidth = maxLng - minLng;
           
-          // infowindow를 폴리곤 위쪽 외부에 배치 (중심점에서 위쪽으로 폴리곤 높이의 1.5배만큼 이동)
-          const infoWindowLat = maxLat + polygonHeight * 1.5;
-          const infoWindowPos = new kakao.maps.LatLng(infoWindowLat, centerLng);
+          // infowindow 크기 추정 (픽셀 단위를 위도/경도로 변환하기 어려우므로 폴리곤 크기의 일정 비율로 추정)
+          // 일반적으로 infowindow는 약 200-300px 정도이므로, 지도 줌 레벨에 따라 위도/경도로 변환
+          // 간단하게 폴리곤 크기의 20% 정도로 추정
+          const estimatedInfoWindowHeight = polygonHeight * 0.2;
+          const estimatedInfoWindowWidth = polygonWidth * 0.2;
+          
+          // 폴리곤 경계에서의 여유 공간 (폴리곤 크기의 10%)
+          const margin = Math.max(polygonHeight, polygonWidth) * 0.1;
+          
+          // 4방향 후보 위치 계산 (위, 아래, 왼쪽, 오른쪽)
+          const candidates = [
+            // 위쪽: 폴리곤 위쪽 경계 + 여유 공간 + infowindow 높이
+            { lat: maxLat + margin + estimatedInfoWindowHeight, lng: centerLng, distance: maxLat - centerLat + margin + estimatedInfoWindowHeight },
+            // 아래쪽: 폴리곤 아래쪽 경계 - 여유 공간 - infowindow 높이
+            { lat: minLat - margin - estimatedInfoWindowHeight, lng: centerLng, distance: centerLat - minLat + margin + estimatedInfoWindowHeight },
+            // 오른쪽: 폴리곤 오른쪽 경계 + 여유 공간 + infowindow 너비
+            { lat: centerLat, lng: maxLng + margin + estimatedInfoWindowWidth, distance: maxLng - centerLng + margin + estimatedInfoWindowWidth },
+            // 왼쪽: 폴리곤 왼쪽 경계 - 여유 공간 - infowindow 너비
+            { lat: centerLat, lng: minLng - margin - estimatedInfoWindowWidth, distance: centerLng - minLng + margin + estimatedInfoWindowWidth }
+          ];
+          
+          // 가장 가까운 위치 선택 (거리 기준)
+          let bestPosition = candidates[0];
+          for (let i = 1; i < candidates.length; i++) {
+            if (candidates[i].distance < bestPosition.distance) {
+              bestPosition = candidates[i];
+            }
+          }
+          
+          // 선택된 위치가 폴리곤 경계 박스와 겹치지 않는지 확인
+          // infowindow가 폴리곤 경계 박스 밖에 있는지 확인 (여유 공간 포함)
+          const isOutside = 
+            (bestPosition.lat < minLat - margin - estimatedInfoWindowHeight || bestPosition.lat > maxLat + margin + estimatedInfoWindowHeight) ||
+            (bestPosition.lng < minLng - margin - estimatedInfoWindowWidth || bestPosition.lng > maxLng + margin + estimatedInfoWindowWidth);
+          
+          // 폴리곤 경계 박스 밖에 있지 않으면 가장 가까운 방향으로 더 멀리 이동
+          if (!isOutside) {
+            if (bestPosition.lat > centerLat) {
+              // 위쪽 방향
+              bestPosition.lat = maxLat + margin + estimatedInfoWindowHeight;
+            } else if (bestPosition.lat < centerLat) {
+              // 아래쪽 방향
+              bestPosition.lat = minLat - margin - estimatedInfoWindowHeight;
+            } else if (bestPosition.lng > centerLng) {
+              // 오른쪽 방향
+              bestPosition.lng = maxLng + margin + estimatedInfoWindowWidth;
+            } else {
+              // 왼쪽 방향
+              bestPosition.lng = minLng - margin - estimatedInfoWindowWidth;
+            }
+          }
+          
+          const infoWindowPos = new window.kakao.maps.LatLng(bestPosition.lat, bestPosition.lng);
           
           // infowindow 위치 업데이트
           kakaoGisRef.current.cadastralOverlay.setPosition(infoWindowPos);
