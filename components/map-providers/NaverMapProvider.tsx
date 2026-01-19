@@ -3,7 +3,7 @@
 import { BaseMapProvider, MapProvider, MapProviderConfig, MapState, MapCapabilities, Marker, MarkerOptions } from './BaseMapProvider';
 import { Layer } from './BaseMapProvider';
 import { LayerType } from '../../types';
-import { SDK_CHECK_INTERVAL } from '../../utils/constants';
+import { SDK_CHECK_INTERVAL } from '../utils/constants';
 
 /**
  * Naver Maps 제공자 구현
