@@ -49,6 +49,7 @@ const MapPane: React.FC<MapPaneProps> = ({
   const naverMarkerRef = useRef<any>(null); // Marker on Mini-map
   const naverDirectionPolygonRef = useRef<any>(null); // 방향 표시 폴리곤 (원뿔형)
   const naverMarkerIconUrlRef = useRef<string | null>(null); // 마커 아이콘 URL (메모리 정리용)
+  const naverPolygonStateRef = useRef<{ pos: any; angle: number } | null>(null); // 폴리곤 재생성을 위한 상태 저장
   const [isNaverLayerOn, setIsNaverLayerOn] = useState(false);
   
   // Kakao Refs & Drawing State
@@ -62,6 +63,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     addressClickListener?: any;
     walkerOverlay?: any; // Walker on Mini-map
     directionPolygon?: any; // 방향 표시 폴리곤 (원뿔형)
+    polygonState?: { pos: any; angle: number } | null; // 폴리곤 재생성을 위한 상태 저장
     cadastralMarker?: any; // 지적 정보 조회 시 표시할 마커
     cadastralPolygon?: any; // 지적 경계 폴리곤
     cadastralOverlay?: any; // 지적 정보 인포윈도우
@@ -424,8 +426,10 @@ const MapPane: React.FC<MapPaneProps> = ({
       kakaoGisRef.current.directionPolygon = null;
     }
 
-    // 부채꼴 폴리곤 파라미터
-    const fanRadiusMeters = 50; // 약 50m
+    if (!map) return;
+
+    // 부채꼴 폴리곤 파라미터 (픽셀 단위로 일정한 크기 유지)
+    const fanRadiusPixels = 50; // 약 50픽셀 (구글 pegman처럼 일정한 크기)
     const fanAngle = 60; // 부채 각도 (도)
     const fanHalfAngle = fanAngle / 2; // 부채 반각
     const numPoints = 20; // 호를 그리기 위한 점의 개수
@@ -433,6 +437,15 @@ const MapPane: React.FC<MapPaneProps> = ({
     // 중심점 좌표
     const centerLat = centerPos.getLat();
     const centerLng = centerPos.getLng();
+
+    // 지도 레벨에 따라 픽셀을 미터로 변환
+    const level = map.getLevel();
+    // 카카오맵 레벨을 줌 레벨로 변환
+    const zoom = kakaoToZoom(level);
+    // 줌 레벨에 따른 미터/픽셀 비율 계산 (대략적인 공식)
+    // 줌 레벨이 높을수록(확대할수록) 1픽셀당 미터가 작아짐
+    const metersPerPixel = (156543.03392 * Math.cos(centerLat * Math.PI / 180)) / Math.pow(2, zoom);
+    const fanRadiusMeters = fanRadiusPixels * metersPerPixel;
 
     // 미터를 위도/경도로 변환 (지구 곡률 고려)
     const latToMeters = 111320; // 1도 위도 ≈ 111,320m
@@ -471,6 +484,9 @@ const MapPane: React.FC<MapPaneProps> = ({
       fillOpacity: 0.3, // 반투명 빨간색
       zIndex: 999 // walker 아래에 표시
     });
+    
+    // 폴리곤 재생성을 위한 상태 저장
+    kakaoGisRef.current.polygonState = { pos: centerPos, angle };
   }, []);
 
   // 카카오맵 Walker 생성 헬퍼 함수 (카카오맵 공식 walker 사용, 방향 동기화)
@@ -572,8 +588,10 @@ const MapPane: React.FC<MapPaneProps> = ({
       naverDirectionPolygonRef.current = null;
     }
 
-    // 부채꼴 폴리곤 파라미터
-    const fanRadiusMeters = 50; // 약 50m
+    if (!map) return;
+
+    // 부채꼴 폴리곤 파라미터 (픽셀 단위로 일정한 크기 유지)
+    const fanRadiusPixels = 50; // 약 50픽셀 (구글 pegman처럼 일정한 크기)
     const fanAngle = 60; // 부채 각도 (도)
     const fanHalfAngle = fanAngle / 2; // 부채 반각
     const numPoints = 20; // 호를 그리기 위한 점의 개수
@@ -581,6 +599,13 @@ const MapPane: React.FC<MapPaneProps> = ({
     // 중심점 좌표
     const centerLat = centerPos.lat();
     const centerLng = centerPos.lng();
+
+    // 지도 줌 레벨에 따라 픽셀을 미터로 변환
+    const zoom = map.getZoom();
+    // 줌 레벨에 따른 미터/픽셀 비율 계산 (대략적인 공식)
+    // 줌 레벨이 높을수록(확대할수록) 1픽셀당 미터가 작아짐
+    const metersPerPixel = (156543.03392 * Math.cos(centerLat * Math.PI / 180)) / Math.pow(2, zoom);
+    const fanRadiusMeters = fanRadiusPixels * metersPerPixel;
 
     // 미터를 위도/경도로 변환 (지구 곡률 고려)
     const latToMeters = 111320; // 1도 위도 ≈ 111,320m
@@ -619,6 +644,9 @@ const MapPane: React.FC<MapPaneProps> = ({
       fillOpacity: 0.3, // 반투명 파란색
       zIndex: 999 // marker 아래에 표시
     });
+    
+    // 폴리곤 재생성을 위한 상태 저장
+    naverPolygonStateRef.current = { pos: centerPos, angle };
   }, []);
 
   // 네이버맵 삼각형 마커 생성 헬퍼 함수
@@ -1008,7 +1036,14 @@ const MapPane: React.FC<MapPaneProps> = ({
         }
       };
       window.kakao.maps.event.addListener(mapRef.current, 'center_changed', handleUpdate);
-      window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', handleUpdate);
+      window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', () => {
+        handleUpdate();
+        // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
+        if (kakaoGisRef.current.polygonState && mapRef.current) {
+          const { pos, angle } = kakaoGisRef.current.polygonState;
+          createKakaoDirectionPolygon(pos, angle, mapRef.current);
+        }
+      });
 
     } else if (type === 'naver') {
       window.naver.maps.Event.addListener(mapRef.current, 'dragstart', () => { isDragging.current = true; });
@@ -1022,7 +1057,14 @@ const MapPane: React.FC<MapPaneProps> = ({
         }
       };
       window.naver.maps.Event.addListener(mapRef.current, 'center_changed', handleUpdate);
-      window.naver.maps.Event.addListener(mapRef.current, 'zoom_changed', handleUpdate);
+      window.naver.maps.Event.addListener(mapRef.current, 'zoom_changed', () => {
+        handleUpdate();
+        // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
+        if (naverPolygonStateRef.current && mapRef.current) {
+          const { pos, angle } = naverPolygonStateRef.current;
+          createNaverDirectionPolygon(pos, angle, mapRef.current);
+        }
+      });
     }
   };
 
@@ -1231,44 +1273,88 @@ const MapPane: React.FC<MapPaneProps> = ({
           const lng = pos.getLng().toFixed(7);
           
           // 커스텀 오버레이 디자인 (말풍선 스타일)
-          const content = `
-            <div style="
-              position: relative;
-              background: rgba(255, 255, 255, 0.95);
-              backdrop-filter: blur(8px);
-              padding: 12px 16px;
-              border-radius: 12px;
-              border: 1px solid rgba(0,0,0,0.1);
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-              font-family: 'Pretendard', sans-serif;
-              min-width: 200px;
-              transform: translateY(-45px);
-              animation: fadeIn 0.3s ease-out;
-            ">
-              <div style="font-size: 11px; color: #3b82f6; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">
-                Selected Location
-              </div>
-              <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
-                ${mainAddr}
-              </div>
-              ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
-              
-              <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
-                <div style="display:flex; justify-content:space-between;"><span>X</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
-                <div style="display:flex; justify-content:space-between;"><span>Y</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
-              </div>
-
-              <div style="
-                position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg);
-                width: 12px; height: 12px; background: rgba(255, 255, 255, 0.95);
-                border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1);
-              "></div>
+          const contentDiv = document.createElement('div');
+          contentDiv.style.cssText = `
+            position: relative;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-family: 'Pretendard', sans-serif;
+            min-width: 200px;
+            transform: translateY(-45px);
+            animation: fadeIn 0.3s ease-out;
+          `;
+          
+          // 닫기 버튼
+          const closeBtn = document.createElement('button');
+          closeBtn.innerHTML = '✕';
+          closeBtn.style.cssText = `
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.1);
+            color: #64748b;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+          `;
+          closeBtn.title = '닫기';
+          closeBtn.onmouseover = () => {
+            closeBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+            closeBtn.style.color = '#ef4444';
+          };
+          closeBtn.onmouseout = () => {
+            closeBtn.style.background = 'rgba(0, 0, 0, 0.1)';
+            closeBtn.style.color = '#64748b';
+          };
+          closeBtn.onclick = (e: any) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (kakaoGisRef.current.cadastralOverlay) {
+              kakaoGisRef.current.cadastralOverlay.setMap(null);
+              kakaoGisRef.current.cadastralOverlay = null;
+            }
+          };
+          
+          // 내용 HTML
+          contentDiv.innerHTML = `
+            <div style="font-size: 11px; color: #3b82f6; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">
+              Selected Location
             </div>
+            <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
+              ${mainAddr}
+            </div>
+            ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
+            
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
+              <div style="display:flex; justify-content:space-between;"><span>X</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>Y</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
+            </div>
+
+            <div style="
+              position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg);
+              width: 12px; height: 12px; background: rgba(255, 255, 255, 0.95);
+              border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1);
+            "></div>
             <style>@keyframes fadeIn { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: translateY(-45px); } }</style>
           `;
+          
+          // 닫기 버튼을 contentDiv에 추가
+          contentDiv.appendChild(closeBtn);
 
           const overlay = new window.kakao.maps.CustomOverlay({
-            content: content,
+            content: contentDiv,
             map: currentMap,
             position: pos,
             yAnchor: 1,
