@@ -163,10 +163,17 @@ const MapPane: React.FC<MapPaneProps> = ({
                       if (pos && mapRef.current) {
                         const lat = pos.lat();
                         const lng = pos.lng();
-                        mapRef.current.setCenter({ lat, lng });
-                        onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
-                        // 거리뷰 상태 업데이트 (동기화를 위해)
-                        onStreetViewChange({ lat, lng, active: true });
+                        // 좌표 유효성 검증
+                        if (typeof lat === 'number' && typeof lng === 'number' && 
+                            !isNaN(lat) && !isNaN(lng) && 
+                            isFinite(lat) && isFinite(lng)) {
+                          mapRef.current.setCenter({ lat, lng });
+                          onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
+                          // 거리뷰 상태 업데이트 (동기화를 위해)
+                          onStreetViewChange({ lat, lng, active: true });
+                        } else {
+                          console.warn('Google Street View: 유효하지 않은 좌표', { lat, lng });
+                        }
                       }
                     } else {
                       // 거리뷰 컨테이너 숨김
@@ -188,16 +195,23 @@ const MapPane: React.FC<MapPaneProps> = ({
                       if (pos && mapRef.current) {
                         const lat = pos.lat();
                         const lng = pos.lng();
-                        isDragging.current = true; 
-                        
-                        // 거리뷰 상태 업데이트 (동기화를 위해)
-                        onStreetViewChange({ lat, lng, active: true });
-                        
-                        // 미니맵 중앙으로 이동
-                        mapRef.current.setCenter({ lat, lng });
-                        onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
-                        
-                        setTimeout(() => isDragging.current = false, 200);
+                        // 좌표 유효성 검증
+                        if (typeof lat === 'number' && typeof lng === 'number' && 
+                            !isNaN(lat) && !isNaN(lng) && 
+                            isFinite(lat) && isFinite(lng)) {
+                          isDragging.current = true; 
+                          
+                          // 거리뷰 상태 업데이트 (동기화를 위해)
+                          onStreetViewChange({ lat, lng, active: true });
+                          
+                          // 미니맵 중앙으로 이동
+                          mapRef.current.setCenter({ lat, lng });
+                          onStateChange({ lat, lng, zoom: mapRef.current.getZoom() });
+                          
+                          setTimeout(() => isDragging.current = false, 200);
+                        } else {
+                          console.warn('Google Street View: 유효하지 않은 좌표 (position_changed)', { lat, lng });
+                        }
                       }
                     }
                   });
@@ -1814,13 +1828,29 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const { lat, lng } = streetViewState;
     
+    // 좌표 유효성 검증
+    if (typeof lat !== 'number' || typeof lng !== 'number' || 
+        isNaN(lat) || isNaN(lng) || 
+        !isFinite(lat) || !isFinite(lng)) {
+      console.warn('Street View State: 유효하지 않은 좌표', { lat, lng });
+      return;
+    }
+    
     // 현재 거리뷰 위치와 동일하면 무시 (무한 루프 방지)
     if (isStreetViewActive) {
       let currentLat = 0, currentLng = 0;
       if (config.type === 'google' && googlePanoInstanceRef.current && googlePanoInstanceRef.current.getPosition()) {
         const pos = googlePanoInstanceRef.current.getPosition();
-        currentLat = pos.lat();
-        currentLng = pos.lng();
+        if (pos) {
+          const posLat = pos.lat();
+          const posLng = pos.lng();
+          if (typeof posLat === 'number' && typeof posLng === 'number' && 
+              !isNaN(posLat) && !isNaN(posLng) && 
+              isFinite(posLat) && isFinite(posLng)) {
+            currentLat = posLat;
+            currentLng = posLng;
+          }
+        }
       } else if (config.type === 'kakao' && kakaoGisRef.current.rv && kakaoGisRef.current.rv.getPosition()) {
         const pos = kakaoGisRef.current.rv.getPosition();
         currentLat = pos.getLat();
