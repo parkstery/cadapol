@@ -680,12 +680,38 @@ const MapPane: React.FC<MapPaneProps> = ({
         console.log('Naver Panorama 초기화 완료');
         // 파노라마가 실제로 로드된 위치로 마커 업데이트
         const actualPos = pano.getPosition();
-        if (naverMarkerRef.current) {
-          naverMarkerRef.current.setPosition(actualPos);
-        }
+        const pov = pano.getPov();
+        const angle = pov ? pov.pan : 0;
+        
         if (mapRef.current) {
           mapRef.current.setCenter(actualPos);
+          
+          // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
+          requestAnimationFrame(() => {
+            if (!mapRef.current) return;
+            
+            const currentPos = pano.getPosition();
+            if (currentPos && naverMarkerRef.current) {
+              naverMarkerRef.current.setPosition(currentPos);
+              naverMarkerRef.current.setMap(mapRef.current);
+            }
+          });
         }
+        
+        if (naverMarkerRef.current) {
+          naverMarkerRef.current.setPosition(actualPos);
+          naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+          if (typeof naverMarkerRef.current.setAngle === 'function') {
+            naverMarkerRef.current.setAngle(angle);
+          }
+          naverMarkerRef.current.setMap(mapRef.current);
+        }
+        
+        // 방향 표시 폴리곤 업데이트
+        if (mapRef.current) {
+          createNaverDirectionPolygon(actualPos, angle, mapRef.current);
+        }
+        
         // 파노라마 초기화 후 리사이즈 이벤트 트리거 (렌더링 보장)
         // 컨테이너 크기가 확실히 설정된 후 리사이즈
         setTimeout(() => {
@@ -717,6 +743,17 @@ const MapPane: React.FC<MapPaneProps> = ({
             
             // Sync Map Center - 미니맵 중앙으로 이동
             mapRef.current.setCenter(pos);
+            
+            // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
+            requestAnimationFrame(() => {
+              if (!mapRef.current) return;
+              
+              const currentPos = pano.getPosition();
+              if (currentPos && naverMarkerRef.current) {
+                naverMarkerRef.current.setPosition(currentPos);
+                naverMarkerRef.current.setMap(mapRef.current);
+              }
+            });
             
             // Sync Marker - 즉시 업데이트
             if (naverMarkerRef.current) {
@@ -756,6 +793,18 @@ const MapPane: React.FC<MapPaneProps> = ({
         // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
         if (mapRef.current) {
           mapRef.current.setCenter(pos);
+          
+          // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
+          requestAnimationFrame(() => {
+            if (!mapRef.current || !naverMarkerRef.current) return;
+            
+            // 마커 위치를 다시 확인하고 업데이트 (중앙 유지 보장)
+            const currentPos = pano.getPosition();
+            if (currentPos) {
+              naverMarkerRef.current.setPosition(currentPos);
+              naverMarkerRef.current.setMap(mapRef.current);
+            }
+          });
         }
         
         // Sync Marker - 미니맵 중앙에 위치 (삼각형 마커, 방향 동기화)
@@ -794,6 +843,17 @@ const MapPane: React.FC<MapPaneProps> = ({
         // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
         if (mapRef.current && pos) {
           mapRef.current.setCenter(pos);
+          
+          // setCenter 후 마커 위치를 즉시 업데이트 (비동기 처리 보완)
+          requestAnimationFrame(() => {
+            if (!mapRef.current || !naverMarkerRef.current) return;
+            
+            const currentPos = pano.getPosition();
+            if (currentPos) {
+              naverMarkerRef.current.setPosition(currentPos);
+              naverMarkerRef.current.setMap(mapRef.current);
+            }
+          });
         }
         
         if (naverMarkerRef.current && mapRef.current && pos) {
