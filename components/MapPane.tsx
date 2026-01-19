@@ -1359,8 +1359,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const script = document.createElement('script');
     script.id = callbackName;
-    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
+    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step1: Script load error");
       delete (window as any)[callbackName];
