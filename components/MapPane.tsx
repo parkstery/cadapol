@@ -1233,6 +1233,43 @@ const MapPane: React.FC<MapPaneProps> = ({
         polygon.setMap(currentMap);
         kakaoGisRef.current.cadastralPolygon = polygon;
         console.log("Cadastral polygon drawn successfully", paths.length, "points");
+        
+        // 폴리곤 생성 후 infowindow 위치를 폴리곤 외부로 조정
+        if (kakaoGisRef.current.cadastralOverlay) {
+          // 폴리곤의 중심점 계산
+          let centerLat = 0;
+          let centerLng = 0;
+          paths.forEach((path: any) => {
+            centerLat += path.getLat();
+            centerLng += path.getLng();
+          });
+          centerLat /= paths.length;
+          centerLng /= paths.length;
+          
+          // 폴리곤의 경계 박스 계산 (최대/최소 위도/경도)
+          let minLat = paths[0].getLat();
+          let maxLat = paths[0].getLat();
+          let minLng = paths[0].getLng();
+          let maxLng = paths[0].getLng();
+          paths.forEach((path: any) => {
+            const lat = path.getLat();
+            const lng = path.getLng();
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lng < minLng) minLng = lng;
+            if (lng > maxLng) maxLng = lng;
+          });
+          
+          // 폴리곤의 높이 계산 (위도 차이)
+          const polygonHeight = maxLat - minLat;
+          
+          // infowindow를 폴리곤 위쪽 외부에 배치 (중심점에서 위쪽으로 폴리곤 높이의 1.5배만큼 이동)
+          const infoWindowLat = maxLat + polygonHeight * 1.5;
+          const infoWindowPos = new kakao.maps.LatLng(infoWindowLat, centerLng);
+          
+          // infowindow 위치 업데이트
+          kakaoGisRef.current.cadastralOverlay.setPosition(infoWindowPos);
+        }
       } catch (e) {
         console.error("Failed to create polygon", e);
       }
@@ -1256,10 +1293,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       // 기존 지적 관련 그래픽 제거
       clearCadastralGraphics();
 
-      // 1. 클릭 위치에 마커 표시
-      const marker = new window.kakao.maps.Marker({ position: pos });
-      marker.setMap(currentMap);
-      kakaoGisRef.current.cadastralMarker = marker;
+      // 1. 마커 표시 제거 (요청사항: 마커가 표시되지 않도록)
 
       // 2. 주소 변환 및 커스텀 오버레이(InfoWindow) 표시
       kakaoGisRef.current.geocoder.coord2Address(pos.getLng(), pos.getLat(), (result: any, status: any) => {
@@ -1528,8 +1562,9 @@ const MapPane: React.FC<MapPaneProps> = ({
                     if (mapRef.current) {
                       mapRef.current.setCenter(rvPos);
                     }
-                    // 방향 표시 폴리곤 업데이트
+                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
                     if (rvPos && mapRef.current && viewpoint) {
+                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
                       createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
@@ -1550,8 +1585,9 @@ const MapPane: React.FC<MapPaneProps> = ({
                         kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
                       }
                     }
-                    // 방향 표시 폴리곤 업데이트
+                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
                     if (rvPos && mapRef.current && viewpoint) {
+                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
                       createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
@@ -1942,11 +1978,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                 floatingOverlay.setPosition(mousePos);
                 const content = floatingOverlay.getContent();
                 if (content) {
-                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
                 }
             } else {
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${distance}m</div>`;
                 floatingOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
                     position: mousePos,
@@ -2000,7 +2036,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                     : 0;
                 
                 const content = document.createElement('div');
-                content.innerHTML = `<div class="measure-label" style="background:white; border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px;">${segmentLength}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:white; border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px;">${segmentLength}m</div>`;
                 const fixedOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
                     position: pos,
@@ -2061,7 +2097,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const content = document.createElement('div');
                 content.style.position = 'relative';
                 content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
-                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
+                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
                 content.appendChild(textCloseBtn);
                 content.appendChild(deleteBtn);
                 
@@ -2238,10 +2274,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                 // 플로우팅 오버레이 업데이트
                 if (floatingOverlay) {
                     floatingOverlay.setPosition(mousePos);
-                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
+                    floatingOverlay.setContent(`<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`);
                 } else {
                     const content = document.createElement('div');
-                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:4px 6px; border-radius:4px; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:rgba(255,255,255,0.9); border:1px solid #333; padding:2.8px 4.2px; border-radius:4px; font-size:8.4px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${area}m²</div>`;
                     floatingOverlay = new window.kakao.maps.CustomOverlay({
                         map: map,
                         position: mousePos,
@@ -2333,7 +2369,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const content = document.createElement('div');
                     content.style.position = 'relative';
                     content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
-                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
+                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:4.2px 5.6px; border-radius:4px; font-size:9.8px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
                     content.appendChild(textCloseBtn);
                     content.appendChild(deleteBtn);
                     
