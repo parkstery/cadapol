@@ -18,7 +18,7 @@ const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction,
   // 오른쪽으로 90px 이동: 기존 값에서 90px 감소
   // 거리뷰 비활성화: 228px - 90px = 138px
   // 거리뷰 활성화: 262px - 90px = 172px
-  const toolbarRight = isStreetViewActive ? 'right-[72px]' : 'right-[38px]'; 
+  const toolbarRight = isStreetViewActive ? 'right-[75px]' : 'right-[41px]'; 
   
   return (
     <div className={`absolute top-4 ${toolbarRight} z-20 flex bg-white rounded-md shadow-lg border border-gray-300 overflow-hidden`}>
