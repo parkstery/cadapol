@@ -44,6 +44,7 @@ export class VWorldAPI {
           return;
       }
 
+      // 콜백 함수 이름 생성 (기존 지적 기능과 동일한 형식)
       const callbackName = `vworld_boundary_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
       
       let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&size=1000`;
@@ -54,25 +55,54 @@ export class VWorldAPI {
         url += `&bbox=${bbox}`;
       }
 
+      // 타임아웃 설정 (30초)
+      let timeoutId: any = null;
+      let isResolved = false;
+      
+      // 콜백 함수를 window 객체에 할당 (기존 지적 기능과 동일한 방식)
       (window as any)[callbackName] = (data: any) => {
-        delete (window as any)[callbackName];
-        document.getElementById(callbackName)?.remove();
+        if (isResolved) return;
+        isResolved = true;
+        
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
+        try {
+          delete (window as any)[callbackName];
+        } catch (e) {
+          // 이미 삭제된 경우 무시
+        }
+        const scriptElement = document.getElementById(callbackName);
+        if (scriptElement) {
+          scriptElement.remove();
+        }
 
         try {
-          if (data.response && data.response.status === 'OK' && data.response.result) {
-            const features = data.response.result.featureCollection?.features || [];
-            const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
-              const props = feature.properties || {};
-              return {
-                id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
-                name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
-                level,
-                geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
-              };
-            });
-            resolve(boundaries);
+          // VWorld API 응답 형식 확인
+          if (data && data.response) {
+            if (data.response.status === 'OK' && data.response.result) {
+              const features = data.response.result.featureCollection?.features || [];
+              const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+                const props = feature.properties || {};
+                return {
+                  id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
+                  name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
+                  level,
+                  geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
+                };
+              });
+              resolve(boundaries);
+            } else if (data.response.status === 'ERROR') {
+              console.warn('VWorld API Error:', data.response.error || data.response.text);
+              resolve([]);
+            } else {
+              console.warn('VWorld API: No features found', data.response);
+              resolve([]);
+            }
           } else {
-            console.warn('VWorld API: No features found', data.response);
+            console.warn('VWorld API: Invalid response format', data);
             resolve([]);
           }
         } catch (error) {
@@ -85,11 +115,44 @@ export class VWorldAPI {
       script.id = callbackName;
       script.src = `${url}&callback=${callbackName}`;
       script.onerror = () => {
+        if (isResolved) return;
+        isResolved = true;
+        
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
         console.error('VWorld API: Script load error');
-        delete (window as any)[callbackName];
-        document.getElementById(callbackName)?.remove();
+        try {
+          delete (window as any)[callbackName];
+        } catch (e) {
+          // 이미 삭제된 경우 무시
+        }
+        const scriptElement = document.getElementById(callbackName);
+        if (scriptElement) {
+          scriptElement.remove();
+        }
         reject(new Error('Script load failed'));
       };
+      
+      // 타임아웃 설정 (30초)
+      timeoutId = setTimeout(() => {
+        if (isResolved) return;
+        isResolved = true;
+        
+        try {
+          delete (window as any)[callbackName];
+        } catch (e) {
+          // 이미 삭제된 경우 무시
+        }
+        const scriptElement = document.getElementById(callbackName);
+        if (scriptElement) {
+          scriptElement.remove();
+        }
+        reject(new Error('VWorld API request timeout'));
+      }, 30000);
+      
       document.body.appendChild(script);
     });
   }
