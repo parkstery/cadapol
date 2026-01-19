@@ -69,12 +69,27 @@ export class AdministrativeBoundaryLayer implements Layer {
     }
     
     try {
+      // 맵이 완전히 로드될 때까지 대기
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // 지도 경계 가져오기 (항상 현재 보이는 영역만 조회)
-      const bounds = this.getMapBounds(mapInstance, mapProvider.getName());
+      let bounds = this.getMapBounds(mapInstance, mapProvider.getName());
+      
+      // bounds를 가져오지 못한 경우 재시도
+      if (!bounds) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        bounds = this.getMapBounds(mapInstance, mapProvider.getName());
+      }
       
       if (!bounds) {
-        console.warn('AdministrativeBoundaryLayer: Cannot get map bounds');
-        return;
+        console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
+        // 기본 bounds 사용 (서울 지역)
+        bounds = {
+          minLat: 37.4,
+          minLng: 126.8,
+          maxLat: 37.7,
+          maxLng: 127.2
+        };
       }
       
       // VWorld API로 행정경계 데이터 조회 (현재 보이는 영역만)
@@ -102,41 +117,91 @@ export class AdministrativeBoundaryLayer implements Layer {
     try {
       if (providerName === 'google') {
         const bounds = mapInstance.getBounds();
-        if (bounds) {
+        if (bounds && bounds.getNorthEast && bounds.getSouthWest) {
           const ne = bounds.getNorthEast();
           const sw = bounds.getSouthWest();
-          return {
-            minLat: sw.lat(),
-            minLng: sw.lng(),
-            maxLat: ne.lat(),
-            maxLng: ne.lng()
-          };
+          if (ne && sw) {
+            return {
+              minLat: sw.lat(),
+              minLng: sw.lng(),
+              maxLat: ne.lat(),
+              maxLng: ne.lng()
+            };
+          }
+        }
+        // bounds를 가져오지 못한 경우 center와 zoom으로 계산
+        const center = mapInstance.getCenter();
+        const zoom = mapInstance.getZoom();
+        if (center && zoom !== undefined) {
+          return this.calculateBoundsFromCenter(center.lat(), center.lng(), zoom, 'google');
         }
       } else if (providerName === 'kakao') {
         const bounds = mapInstance.getBounds();
-        if (bounds) {
-          return {
-            minLat: bounds.getSouthWest().getLat(),
-            minLng: bounds.getSouthWest().getLng(),
-            maxLat: bounds.getNorthEast().getLat(),
-            maxLng: bounds.getNorthEast().getLng()
-          };
+        if (bounds && bounds.getSouthWest && bounds.getNorthEast) {
+          const sw = bounds.getSouthWest();
+          const ne = bounds.getNorthEast();
+          if (sw && ne) {
+            return {
+              minLat: sw.getLat(),
+              minLng: sw.getLng(),
+              maxLat: ne.getLat(),
+              maxLng: ne.getLng()
+            };
+          }
+        }
+        // bounds를 가져오지 못한 경우 center와 level로 계산
+        const center = mapInstance.getCenter();
+        const level = mapInstance.getLevel();
+        if (center && level !== undefined) {
+          const zoom = 20 - level; // 카카오 level을 zoom으로 변환
+          return this.calculateBoundsFromCenter(center.getLat(), center.getLng(), zoom, 'kakao');
         }
       } else if (providerName === 'naver') {
         const bounds = mapInstance.getBounds();
-        if (bounds) {
-          return {
-            minLat: bounds.getSW().lat(),
-            minLng: bounds.getSW().lng(),
-            maxLat: bounds.getNE().lat(),
-            maxLng: bounds.getNE().lng()
-          };
+        if (bounds && bounds.getSW && bounds.getNE) {
+          const sw = bounds.getSW();
+          const ne = bounds.getNE();
+          if (sw && ne) {
+            return {
+              minLat: sw.lat(),
+              minLng: sw.lng(),
+              maxLat: ne.lat(),
+              maxLng: ne.lng()
+            };
+          }
+        }
+        // bounds를 가져오지 못한 경우 center와 zoom으로 계산
+        const center = mapInstance.getCenter();
+        const zoom = mapInstance.getZoom();
+        if (center && zoom !== undefined) {
+          return this.calculateBoundsFromCenter(center.lat(), center.lng(), zoom, 'naver');
         }
       }
     } catch (error) {
       console.warn('Failed to get map bounds', error);
     }
     return undefined;
+  }
+  
+  /**
+   * center와 zoom으로부터 bounds 계산
+   */
+  private calculateBoundsFromCenter(lat: number, lng: number, zoom: number, providerName: string): { minLat: number; minLng: number; maxLat: number; maxLng: number } {
+    // zoom 레벨에 따른 대략적인 범위 계산
+    // zoom 1 = 전체 지구, zoom 20 = 매우 좁은 영역
+    const degreesPerPixel = 360 / (256 * Math.pow(2, zoom));
+    const mapWidth = 800; // 대략적인 맵 너비 (픽셀)
+    const mapHeight = 600; // 대략적인 맵 높이 (픽셀)
+    
+    const latRange = (mapHeight * degreesPerPixel) / 2;
+    const lngRange = (mapWidth * degreesPerPixel) / 2;
+    
+    return {
+      minLat: lat - latRange,
+      minLng: lng - lngRange,
+      maxLat: lat + latRange,
+      maxLng: lng + lngRange
+    };
   }
   
   private createPolygon(boundary: AdministrativeBoundary, mapProvider: MapProvider): any {
