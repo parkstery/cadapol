@@ -26,18 +26,83 @@ export class VWorldAPI {
     level: 'sido' | 'sigungu' | 'emd',
     bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
   ): Promise<AdministrativeBoundary[]> {
+    // VWorld API 데이터셋 선택
+    let dataSet = '';
+    switch (level) {
+      case 'sido':
+        dataSet = 'LT_C_ADSIDO_INFO'; // 시도
+        break;
+      case 'sigungu':
+        dataSet = 'LT_C_ADSIGG_INFO'; // 시군구
+        break;
+      case 'emd':
+        dataSet = 'LT_C_ADEMD_INFO'; // 읍면동
+        break;
+      default:
+        throw new Error(`Unsupported level: ${level}`);
+    }
+    
+    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
+    let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    
+    // 경계가 지정된 경우 bbox 필터 추가
+    if (bounds) {
+      // VWorld API bbox 형식: minx,miny,maxx,maxy (경도,위도 순서)
+      const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+      url += `&bbox=${bbox}`;
+    }
+    
+    try {
+      // fetch API를 사용하여 CORS 우회 시도
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      
+      // VWorld API 응답 형식 확인
+      if (data.response && data.response.status === 'OK' && data.response.result) {
+        const features = data.response.result.featureCollection?.features || [];
+        const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+          const props = feature.properties || {};
+          return {
+            id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
+            name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
+            level,
+            geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
+          };
+        });
+        return boundaries;
+      } else {
+        console.warn('VWorld API: No features found or API error', data.response);
+        return [];
+      }
+    } catch (error) {
+      // fetch API 실패 시 JSONP로 폴백
+      console.warn('VWorld API: Fetch failed, trying JSONP', error);
+      return this.getAdministrativeBoundariesJSONP(level, bounds);
+    }
+  }
+  
+  /**
+   * JSONP 방식으로 행정경계 데이터 조회 (fallback)
+   */
+  private static async getAdministrativeBoundariesJSONP(
+    level: 'sido' | 'sigungu' | 'emd',
+    bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
+  ): Promise<AdministrativeBoundary[]> {
     return new Promise((resolve, reject) => {
       // VWorld API 데이터셋 선택
       let dataSet = '';
       switch (level) {
         case 'sido':
-          dataSet = 'LT_C_ADSIDO_INFO'; // 시도
+          dataSet = 'LT_C_ADSIDO_INFO';
           break;
         case 'sigungu':
-          dataSet = 'LT_C_ADSIGG_INFO'; // 시군구
+          dataSet = 'LT_C_ADSIGG_INFO';
           break;
         case 'emd':
-          dataSet = 'LT_C_ADEMD_INFO'; // 읍면동
+          dataSet = 'LT_C_ADEMD_INFO';
           break;
         default:
           reject(new Error(`Unsupported level: ${level}`));
@@ -47,49 +112,39 @@ export class VWorldAPI {
       // 기존 지적 기능과 동일한 콜백 함수 이름 형식 사용
       const callbackName = `vworld_boundary_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
       
-      // 기존 지적 기능과 동일한 URL 형식 사용
       const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
       let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
       
-      // 경계가 지정된 경우 bbox 필터 추가
       if (bounds) {
-        // VWorld API bbox 형식: minx,miny,maxx,maxy (경도,위도 순서)
         const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
         url += `&bbox=${bbox}`;
       }
       
-      // 콜백 함수를 window 객체에 할당 (기존 지적 기능과 동일한 방식)
+      // 콜백 함수를 window 객체에 할당
       (window as any)[callbackName] = (data: any) => {
         delete (window as any)[callbackName];
         document.getElementById(callbackName)?.remove();
 
-        try {
-          // VWorld API 응답 형식 확인 (기존 지적 기능과 동일한 방식)
-          if (data.response && data.response.status === 'OK' && data.response.result) {
-            const features = data.response.result.featureCollection?.features || [];
-            const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
-              const props = feature.properties || {};
-              return {
-                id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
-                name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
-                level,
-                geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
-              };
-            });
-            resolve(boundaries);
-          } else {
-            console.warn('VWorld API: No features found or API error', data.response);
-            resolve([]);
-          }
-        } catch (error) {
-          console.error('VWorld API: Parse error', error);
-          reject(error);
+        if (data.response && data.response.status === 'OK' && data.response.result) {
+          const features = data.response.result.featureCollection?.features || [];
+          const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+            const props = feature.properties || {};
+            return {
+              id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
+              name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
+              level,
+              geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
+            };
+          });
+          resolve(boundaries);
+        } else {
+          console.warn('VWorld API: No features found or API error', data.response);
+          resolve([]);
         }
       };
 
       const script = document.createElement('script');
       script.id = callbackName;
-      // 기존 지적 기능과 동일한 형식으로 callback 파라미터 추가
       script.src = `${url}&callback=${callbackName}`;
       script.onerror = () => {
         console.error('VWorld API: Script load error');
