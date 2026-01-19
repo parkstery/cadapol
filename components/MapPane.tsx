@@ -1773,19 +1773,31 @@ const MapPane: React.FC<MapPaneProps> = ({
                 // 전체 거리 표시 및 버튼들
                 const textCloseBtn = document.createElement('button');
                 textCloseBtn.innerHTML = '✕';
-                textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
                 textCloseBtn.title = '텍스트 박스 닫기';
                 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.innerHTML = '🗑️';
-                deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
                 deleteBtn.title = '측정 객체 삭제';
                 
                 const content = document.createElement('div');
                 content.style.position = 'relative';
-                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#FF3333;">총 거리: ${totalLength}m</div>`;
+                content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
+                content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#FF3333; pointer-events: none;">총 거리: ${totalLength}m</div>`;
                 content.appendChild(textCloseBtn);
                 content.appendChild(deleteBtn);
+                
+                // content div의 클릭 이벤트 전파 방지 (버튼이 아닌 부분 클릭 시 지도 클릭 방지)
+                content.addEventListener('mousedown', (e: any) => {
+                    e.stopPropagation();
+                });
+                content.addEventListener('mouseup', (e: any) => {
+                    e.stopPropagation();
+                });
+                content.addEventListener('click', (e: any) => {
+                    e.stopPropagation();
+                });
                 
                 const totalOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
@@ -1800,8 +1812,8 @@ const MapPane: React.FC<MapPaneProps> = ({
                 const savedCurrentLine = currentLine;
                 const savedFixedOverlays = [...fixedOverlays];
                 
-                // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제)
-                textCloseBtn.addEventListener('click', (e: any) => {
+                // 텍스트 박스 닫기 버튼 이벤트 처리 (mousedown, mouseup, click 모두 처리)
+                const handleTextCloseBtnClick = (e: any) => {
                     e.stopPropagation(); // 이벤트 전파 방지
                     e.preventDefault(); // 기본 동작 방지
                     isButtonClick = true; // 버튼 클릭 플래그 설정
@@ -1822,10 +1834,13 @@ const MapPane: React.FC<MapPaneProps> = ({
                             kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
                         }
                     }
-                }, true); // 캡처 단계에서 처리
+                };
+                textCloseBtn.addEventListener('mousedown', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                textCloseBtn.addEventListener('mouseup', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                textCloseBtn.addEventListener('click', handleTextCloseBtnClick, true);
                 
-                // 측정 객체 삭제 버튼 (해당 객체와 해당 객체의 텍스트 모두 삭제)
-                deleteBtn.addEventListener('click', (e: any) => {
+                // 측정 객체 삭제 버튼 이벤트 처리 (mousedown, mouseup, click 모두 처리)
+                const handleDeleteBtnClick = (e: any) => {
                     e.stopPropagation(); // 이벤트 전파 방지
                     e.preventDefault(); // 기본 동작 방지
                     isButtonClick = true; // 버튼 클릭 플래그 설정
@@ -1855,7 +1870,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                             kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
                         }
                     }
-                }, true); // 캡처 단계에서 처리
+                };
+                deleteBtn.addEventListener('mousedown', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                deleteBtn.addEventListener('mouseup', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                deleteBtn.addEventListener('click', handleDeleteBtnClick, true);
                 
                 map.setCursor('default');
                 currentLine = null;
@@ -2027,19 +2045,31 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 면적 표시 및 버튼들
                     const textCloseBtn = document.createElement('button');
                     textCloseBtn.innerHTML = '✕';
-                    textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                    textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
                     textCloseBtn.title = '텍스트 박스 닫기';
                     
                     const deleteBtn = document.createElement('button');
                     deleteBtn.innerHTML = '🗑️';
-                    deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                    deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3); pointer-events: auto; z-index: 1000;';
                     deleteBtn.title = '측정 객체 삭제';
                     
                     const content = document.createElement('div');
                     content.style.position = 'relative';
-                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#39f;">면적: ${area}m²</div>`;
+                    content.style.pointerEvents = 'none'; // 오버레이 자체는 클릭 이벤트를 차단하지 않음
+                    content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#39f; pointer-events: none;">면적: ${area}m²</div>`;
                     content.appendChild(textCloseBtn);
                     content.appendChild(deleteBtn);
+                    
+                    // content div의 클릭 이벤트 전파 방지 (버튼이 아닌 부분 클릭 시 지도 클릭 방지)
+                    content.addEventListener('mousedown', (e: any) => {
+                        e.stopPropagation();
+                    });
+                    content.addEventListener('mouseup', (e: any) => {
+                        e.stopPropagation();
+                    });
+                    content.addEventListener('click', (e: any) => {
+                        e.stopPropagation();
+                    });
                     
                     const areaOverlay = new window.kakao.maps.CustomOverlay({
                         map: map,
@@ -2053,8 +2083,8 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 참조 저장 (currentPoly가 null로 설정되기 전에 저장)
                     const savedCurrentPoly = currentPoly;
                     
-                    // 텍스트 박스 닫기 버튼 (측정 결과 텍스트와 측정 도중 생성된 텍스트 박스 일괄 삭제)
-                    textCloseBtn.addEventListener('click', (e: any) => {
+                    // 텍스트 박스 닫기 버튼 이벤트 처리 (mousedown, mouseup, click 모두 처리)
+                    const handleTextCloseBtnClick = (e: any) => {
                         e.stopPropagation(); // 이벤트 전파 방지
                         e.preventDefault(); // 기본 동작 방지
                         isButtonClick = true; // 버튼 클릭 플래그 설정
@@ -2067,10 +2097,13 @@ const MapPane: React.FC<MapPaneProps> = ({
                                 kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
                             }
                         }
-                    }, true); // 캡처 단계에서 처리
+                    };
+                    textCloseBtn.addEventListener('mousedown', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                    textCloseBtn.addEventListener('mouseup', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                    textCloseBtn.addEventListener('click', handleTextCloseBtnClick, true);
                     
-                    // 측정 객체 삭제 버튼 (해당 객체와 해당 객체의 텍스트 모두 삭제)
-                    deleteBtn.addEventListener('click', (e: any) => {
+                    // 측정 객체 삭제 버튼 이벤트 처리 (mousedown, mouseup, click 모두 처리)
+                    const handleDeleteBtnClick = (e: any) => {
                         e.stopPropagation(); // 이벤트 전파 방지
                         e.preventDefault(); // 기본 동작 방지
                         isButtonClick = true; // 버튼 클릭 플래그 설정
@@ -2092,7 +2125,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                                 kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
                             }
                         }
-                    }, true); // 캡처 단계에서 처리
+                    };
+                    deleteBtn.addEventListener('mousedown', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                    deleteBtn.addEventListener('mouseup', (e: any) => { e.stopPropagation(); e.preventDefault(); }, true);
+                    deleteBtn.addEventListener('click', handleDeleteBtnClick, true);
                     
                     currentPoly = null;
                     map.setCursor('default');
