@@ -706,6 +706,42 @@ const MapPane: React.FC<MapPaneProps> = ({
         setIsStreetViewActive(false);
       });
 
+      // 파노라마 링크 변경 이벤트 (클릭으로 이동할 때 발생)
+      window.naver.maps.Event.addListener(pano, 'links_changed', () => {
+        // 링크 변경 후 위치가 변경될 수 있으므로 짧은 딜레이 후 마커 업데이트
+        setTimeout(() => {
+          const pos = pano.getPosition();
+          if (pos && mapRef.current) {
+            const pov = pano.getPov();
+            const angle = pov ? pov.pan : 0;
+            
+            // Sync Map Center - 미니맵 중앙으로 이동
+            mapRef.current.setCenter(pos);
+            
+            // Sync Marker - 즉시 업데이트
+            if (naverMarkerRef.current) {
+              naverMarkerRef.current.setPosition(pos);
+              naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+              if (typeof naverMarkerRef.current.setAngle === 'function') {
+                naverMarkerRef.current.setAngle(angle);
+              }
+              naverMarkerRef.current.setMap(mapRef.current);
+            } else {
+              const icon = createNaverTriangleMarker(angle);
+              naverMarkerRef.current = new window.naver.maps.Marker({
+                position: pos,
+                map: mapRef.current,
+                icon: icon,
+                angle: angle
+              });
+            }
+            
+            // 방향 표시 폴리곤 업데이트
+            createNaverDirectionPolygon(pos, angle, mapRef.current);
+          }
+        }, 50);
+      });
+
       // Sync Map & Marker when Panorama moves - 미니맵 중앙으로 이동
       window.naver.maps.Event.addListener(pano, 'position_changed', () => {
         const pos = pano.getPosition();
