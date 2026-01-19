@@ -159,16 +159,17 @@ const MapPane: React.FC<MapPaneProps> = ({
               }
               layerManagerRef.current.setMapProvider(provider);
               
-              // 🆕 지적 레이어 추가 (Kakao Maps에서만)
-              if (config.type === 'kakao') {
-                const cadastralLayer = new CadastralLayer();
-                const cadastralConfig = createDefaultLayerConfig(
-                  LayerType.CADASTRAL,
-                  '지적 경계',
-                  { visible: false } // 기본적으로 숨김
-                );
-                layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
-              }
+              // 🆕 지적 레이어 추가 (Kakao Maps에서만) - 현재 비활성화 (기존 setupKakaoAddressClick 우선)
+              // TODO: 향후 CadastralLayer를 활성화할 때는 기존 setupKakaoAddressClick과 충돌하지 않도록 수정 필요
+              // if (config.type === 'kakao') {
+              //   const cadastralLayer = new CadastralLayer();
+              //   const cadastralConfig = createDefaultLayerConfig(
+              //     LayerType.CADASTRAL,
+              //     '지적 경계',
+              //     { visible: false } // 기본적으로 숨김
+              //   );
+              //   layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
+              // }
               
               setSdkLoaded(true);
             }).catch((error) => {
@@ -1321,8 +1322,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const script = document.createElement('script');
     script.id = callbackName;
-    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
+    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step1: Script load error");
       delete (window as any)[callbackName];
@@ -1354,8 +1355,8 @@ const MapPane: React.FC<MapPaneProps> = ({
 
     const script = document.createElement('script');
     script.id = callbackName;
-    const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    // Reference 코드와 동일하게 ALLOWED_DOMAIN 직접 사용
+    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     script.onerror = () => {
       console.error("Step2: Script load error");
       delete (window as any)[callbackName];
