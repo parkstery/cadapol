@@ -2272,15 +2272,15 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // -- Naver Street View Click Listener & Marker Sync --
   useEffect(() => {
-    if (config.type === 'naver' && mapRef.current && sdkLoaded && naverStreetLayerRef.current) {
+    if (config.type === 'naver' && mapRef.current && sdkLoaded) {
         const map = mapRef.current;
         
         // Listen to map clicks to open Panorama
         const clickListener = window.naver.maps.Event.addListener(map, 'click', (e: any) => {
             const streetLayer = naverStreetLayerRef.current;
             
-            // Only proceed if the Street Layer is currently ON
-            if (streetLayer && streetLayer.getMap()) {
+            // Only proceed if the Street Layer is currently ON (isNaverLayerOn 상태 확인)
+            if (streetLayer && isNaverLayerOn && streetLayer.getMap()) {
                 console.log('Naver Street View: 클릭 이벤트 감지', e.coord);
                 const latlng = e.coord;
                 
@@ -2288,121 +2288,95 @@ const MapPane: React.FC<MapPaneProps> = ({
                 setIsStreetViewActive(true);
                 
                 // Init Panorama & Marker (거리뷰 활성화 후 컨테이너가 렌더링될 때까지 대기)
-                setTimeout(() => {
-                    const container = naverPanoContainerRef.current;
-                    if (!container) {
-                        console.error('Naver Panorama: 컨테이너가 없습니다');
-                        return;
-                    }
-
-                    try {
-                        // 미니맵 중앙으로 이동
-                        mapRef.current.setCenter(latlng);
+                // requestAnimationFrame을 사용하여 DOM 업데이트 보장
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        const container = naverPanoContainerRef.current;
+                        if (!container) {
+                            console.error('Naver Panorama: 컨테이너가 없습니다');
+                            setIsStreetViewActive(false);
+                            return;
+                        }
                         
-                        // 컨테이너 크기 확인 및 설정
+                        // 컨테이너가 실제로 렌더링되었는지 확인
                         if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+                            console.warn('Naver Panorama: 컨테이너 크기가 0입니다. 재시도합니다.');
                             setTimeout(() => {
                                 if (container.offsetWidth > 0 && container.offsetHeight > 0) {
-                                    if (!naverPanoramaRef.current) {
-                                        initNaverPanorama(container, latlng, map);
-                                    } else {
-                                        // 기존 파노라마 위치 업데이트
-                                        naverPanoramaRef.current.setPosition(latlng);
-                                        
-                                        // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
-                                        if (mapRef.current) {
-                                            mapRef.current.setCenter(latlng);
-                                            
-                                            const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
-                                            const angle = pov ? pov.pan : 0;
-                                            
-                                            if (naverMarkerRef.current) {
-                                                naverMarkerRef.current.setPosition(latlng);
-                                                naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
-                                                if (typeof naverMarkerRef.current.setAngle === 'function') {
-                                                    naverMarkerRef.current.setAngle(angle);
-                                                }
-                                                naverMarkerRef.current.setMap(mapRef.current);
-                                            } else {
-                                                const icon = createNaverTriangleMarker(angle);
-                                                naverMarkerRef.current = new window.naver.maps.Marker({
-                                                    position: latlng,
-                                                    map: mapRef.current,
-                                                    icon: icon,
-                                                    angle: angle
-                                                });
-                                            }
-                                            
-                                            // 방향 표시 폴리곤 생성/업데이트
-                                            createNaverDirectionPolygon(latlng, angle, mapRef.current);
-                                        }
-                                        
-                                        window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
-                                    }
-                                    
-                                    // 거리뷰 상태 업데이트 (동기화를 위해)
-                                    onStreetViewChange({ lat: latlng.lat(), lng: latlng.lng(), active: true });
+                                    initializePanorama();
+                                } else {
+                                    console.error('Naver Panorama: 컨테이너가 렌더링되지 않았습니다');
+                                    setIsStreetViewActive(false);
                                 }
                             }, 200);
                             return;
                         }
-
-                        // Create or Update Panorama
-                        if (!naverPanoramaRef.current) {
-                            initNaverPanorama(container, latlng, map);
-                            // 파노라마 초기화 후 리사이즈 이벤트 트리거 (렌더링 보장)
-                            setTimeout(() => {
-                                if (naverPanoramaRef.current) {
-                                    window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
+                        
+                        initializePanorama();
+                        
+                        function initializePanorama() {
+                            try {
+                                // 미니맵 중앙으로 이동
+                                if (mapRef.current) {
+                                    mapRef.current.setCenter(latlng);
                                 }
-                            }, 200);
-                        } else {
-                            // 기존 파노라마 위치 업데이트
-                            naverPanoramaRef.current.setPosition(latlng);
-                            
-                            // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
-                            if (mapRef.current) {
-                                mapRef.current.setCenter(latlng);
                                 
-                                const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
-                                const angle = pov ? pov.pan : 0;
-                                
-                                if (naverMarkerRef.current) {
-                                    naverMarkerRef.current.setPosition(latlng);
-                                    naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
-                                    if (typeof naverMarkerRef.current.setAngle === 'function') {
-                                        naverMarkerRef.current.setAngle(angle);
-                                    }
-                                    naverMarkerRef.current.setMap(mapRef.current);
+                                // Create or Update Panorama
+                                if (!naverPanoramaRef.current) {
+                                    initNaverPanorama(container, latlng, map);
+                                    // 파노라마 초기화 후 리사이즈 이벤트 트리거 (렌더링 보장)
+                                    setTimeout(() => {
+                                        if (naverPanoramaRef.current) {
+                                            window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
+                                        }
+                                    }, 200);
                                 } else {
-                                    const icon = createNaverTriangleMarker(angle);
-                                    naverMarkerRef.current = new window.naver.maps.Marker({
-                                        position: latlng,
-                                        map: mapRef.current,
-                                        icon: icon,
-                                        angle: angle
-                                    });
+                                    // 기존 파노라마 위치 업데이트
+                                    naverPanoramaRef.current.setPosition(latlng);
+                                    
+                                    // 즉시 마커 업데이트 (position_changed 이벤트 대기 없이)
+                                    if (mapRef.current) {
+                                        const pov = naverPanoramaRef.current ? naverPanoramaRef.current.getPov() : null;
+                                        const angle = pov ? pov.pan : 0;
+                                        
+                                        if (naverMarkerRef.current) {
+                                            naverMarkerRef.current.setPosition(latlng);
+                                            naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
+                                            if (typeof naverMarkerRef.current.setAngle === 'function') {
+                                                naverMarkerRef.current.setAngle(angle);
+                                            }
+                                            naverMarkerRef.current.setMap(mapRef.current);
+                                        } else {
+                                            const icon = createNaverTriangleMarker(angle);
+                                            naverMarkerRef.current = new window.naver.maps.Marker({
+                                                position: latlng,
+                                                map: mapRef.current,
+                                                icon: icon,
+                                                angle: angle
+                                            });
+                                        }
+                                        
+                                        // 방향 표시 폴리곤 생성/업데이트
+                                        createNaverDirectionPolygon(latlng, angle, mapRef.current);
+                                    }
+                                    
+                                    // 리사이즈 이벤트 트리거
+                                    setTimeout(() => {
+                                        if (naverPanoramaRef.current) {
+                                            window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
+                                        }
+                                    }, 100);
                                 }
-                                
-                                // 방향 표시 폴리곤 생성/업데이트
-                                createNaverDirectionPolygon(latlng, angle, mapRef.current);
-                            }
-                            
-                            // 리사이즈 이벤트 트리거
-                            setTimeout(() => {
-                                if (naverPanoramaRef.current) {
-                                    window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
-                                }
-                            }, 100);
-                        }
 
-                        // 거리뷰 상태 업데이트 (동기화를 위해)
-                        onStreetViewChange({ lat: latlng.lat(), lng: latlng.lng(), active: true });
-                    } catch (error) {
-                        console.error('Naver Panorama 생성 오류:', error);
-                        setIsStreetViewActive(false);
-                    }
-                }, 150);
+                                // 거리뷰 상태 업데이트 (동기화를 위해)
+                                onStreetViewChange({ lat: latlng.lat(), lng: latlng.lng(), active: true });
+                            } catch (error) {
+                                console.error('Naver Panorama 생성 오류:', error);
+                                setIsStreetViewActive(false);
+                            }
+                        }
+                    }, 100);
+                });
             }
         });
 
@@ -2418,7 +2392,7 @@ const MapPane: React.FC<MapPaneProps> = ({
             }
         };
     }
-  }, [config.type, sdkLoaded, naverStreetLayerRef]);
+  }, [config.type, sdkLoaded, naverStreetLayerRef, isNaverLayerOn]);
 
 
   // -- Kakao Measurement Effect --
@@ -3399,15 +3373,16 @@ const MapPane: React.FC<MapPaneProps> = ({
            ${config.type === 'naver' && isStreetViewActive ? 'z-[1] opacity-100 pointer-events-auto' : 'z-[-1] opacity-0 pointer-events-none'}`}
         style={{
           position: 'absolute',
-          top: config.type === 'naver' && isStreetViewActive ? '0' : 'auto',
-          left: config.type === 'naver' && isStreetViewActive ? '0' : 'auto',
-          right: config.type === 'naver' && isStreetViewActive ? '0' : 'auto',
-          bottom: config.type === 'naver' && isStreetViewActive ? '0' : 'auto',
-          width: config.type === 'naver' && isStreetViewActive ? '100%' : '0',
-          height: config.type === 'naver' && isStreetViewActive ? '100%' : '0',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          width: '100%',
+          height: '100%',
           margin: 0,
           padding: 0,
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          display: config.type === 'naver' ? 'block' : 'none'
         }}
       />
 
