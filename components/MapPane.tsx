@@ -11,6 +11,13 @@ import { NaverMapProvider } from './map-providers/NaverMapProvider';
 // 🆕 GIS 도구
 import { DistanceMeasure } from './gis-tools/DistanceMeasure';
 import { AreaMeasure } from './gis-tools/AreaMeasure';
+// 🆕 레이어 시스템
+import { LayerManager } from './layers/LayerManager';
+import { LayerType } from '../types';
+import { createDefaultLayerConfig } from './layers/BaseLayer';
+// 🆕 길찾기 시스템
+import { RoutingManager } from './routing/RoutingManager';
+import { RoutingPanel } from './RoutingPanel';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -104,6 +111,14 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   const [gisMode, setGisMode] = useState<GISMode>(GISMode.DEFAULT);
   const roadviewRef = useRef<HTMLDivElement>(null);
+  
+  // 🆕 레이어 관리자
+  const layerManagerRef = useRef<LayerManager>(new LayerManager());
+  
+  // 🆕 길찾기 관리자
+  const routingManagerRef = useRef<RoutingManager>(new RoutingManager());
+  const [isRoutingPanelOpen, setIsRoutingPanelOpen] = useState(false);
+  const [isAdministrativeLayerOn, setIsAdministrativeLayerOn] = useState(false);
 
   // Helper: Zoom conversion
   const zoomToKakao = (z: number) => Math.max(1, Math.min(14, 20 - z));
@@ -137,6 +152,10 @@ const MapPane: React.FC<MapPaneProps> = ({
             }).then(() => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
+              
+              // 🆕 레이어 관리자 및 길찾기 관리자에 맵 제공자 설정
+              layerManagerRef.current.setMapProvider(provider);
+              routingManagerRef.current.setMapProvider(provider);
               
               // 🆕 거리뷰 관련 ref 설정 (기존 코드 호환성)
               if (provider instanceof GoogleMapProvider) {
@@ -288,6 +307,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                   mapProviderRef.current = provider;
                   mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
                   
+                  // 🆕 레이어 관리자 및 길찾기 관리자에 맵 제공자 설정
+                  layerManagerRef.current.setMapProvider(provider);
+                  routingManagerRef.current.setMapProvider(provider);
+                  
                   // 기존 GIS 기능 초기화 (지적 정보 조회 등)
                   // 새 Provider의 Geocoder를 기존 ref에 설정 (호환성)
                   if (provider instanceof KakaoMapProvider) {
@@ -334,6 +357,10 @@ const MapPane: React.FC<MapPaneProps> = ({
             }).then(() => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
+              
+              // 🆕 레이어 관리자 및 길찾기 관리자에 맵 제공자 설정
+              layerManagerRef.current.setMapProvider(provider);
+              routingManagerRef.current.setMapProvider(provider);
               
               // 기존 GIS 기능 초기화 (거리뷰 레이어 등)
               if (provider instanceof NaverMapProvider) {
@@ -393,6 +420,10 @@ const MapPane: React.FC<MapPaneProps> = ({
       mapProviderRef.current.cleanup();
       mapProviderRef.current = null;
     }
+    
+    // 🆕 레이어 관리자 및 길찾기 관리자 정리
+    layerManagerRef.current.setMapProvider(null);
+    routingManagerRef.current.setMapProvider(null);
     
     // Clear Naver Resources
     if (config.type !== 'naver') {
@@ -3405,6 +3436,76 @@ const MapPane: React.FC<MapPaneProps> = ({
               }
               clearKakaoDrawingResources();
             }}
+        />
+      )}
+      
+      {/* 🆕 행정경계 레이어 토글 버튼 */}
+      <button
+        onClick={() => {
+          const newState = !isAdministrativeLayerOn;
+          setIsAdministrativeLayerOn(newState);
+          
+          if (newState) {
+            // 행정경계 레이어 추가
+            const layerConfig = createDefaultLayerConfig(
+              LayerType.ADMINISTRATIVE_BOUNDARY,
+              '행정경계',
+              { options: { level: 'sido' } }
+            );
+            layerManagerRef.current.addLayer(layerConfig);
+          } else {
+            // 행정경계 레이어 제거
+            const layers = layerManagerRef.current.getAllLayers();
+            layers.forEach(layer => {
+              if (layer.getType() === LayerType.ADMINISTRATIVE_BOUNDARY) {
+                layerManagerRef.current.removeLayer(layer.getId());
+              }
+            });
+          }
+        }}
+        className={`absolute top-20 ${config.type === 'naver' ? 'right-[100px]' : 'right-4'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
+          isAdministrativeLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+        }`}
+        title={isAdministrativeLayerOn ? '행정경계 끄기' : '행정경계 켜기'}
+      >
+        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+        </svg>
+      </button>
+      
+      {/* 🆕 길찾기 버튼 */}
+      <button
+        onClick={() => setIsRoutingPanelOpen(!isRoutingPanelOpen)}
+        className={`absolute top-20 ${config.type === 'naver' ? 'right-[150px]' : 'right-[50px]'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
+          isRoutingPanelOpen ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+        }`}
+        title="길찾기"
+      >
+        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+      </button>
+      
+      {/* 🆕 길찾기 패널 */}
+      {isRoutingPanelOpen && (
+        <RoutingPanel
+          onCalculate={async (origin, destination, waypoints) => {
+            try {
+              const routes = await routingManagerRef.current.calculateRouteFromPlaces(
+                origin,
+                destination,
+                waypoints
+              );
+              routingManagerRef.current.displayRoutes(routes);
+            } catch (error) {
+              console.error('Route calculation failed:', error);
+              alert('경로를 찾을 수 없습니다. 출발지와 목적지를 확인해주세요.');
+            }
+          }}
+          onClose={() => {
+            setIsRoutingPanelOpen(false);
+            routingManagerRef.current.clearRoutes();
+          }}
         />
       )}
     </div>
