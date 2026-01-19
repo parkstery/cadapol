@@ -5,6 +5,7 @@ import proj4 from 'proj4';
 // 🆕 새 Provider 시스템 (점진적 마이그레이션)
 import { MapProviderFactory } from './map-providers/MapProviderFactory';
 import { MapProvider } from './map-providers/BaseMapProvider';
+import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
 
@@ -128,9 +129,22 @@ const MapPane: React.FC<MapPaneProps> = ({
               initialState: globalState,
               isSatellite: config.isSatellite,
               onStateChange: onStateChange,
+              panoContainer: googlePanoRef.current || undefined, // 🆕 거리뷰 컨테이너 전달
+              onStreetViewChange: (state) => {
+                // 🆕 거리뷰 상태 변경 시 isStreetViewActive도 업데이트
+                setIsStreetViewActive(state !== null && state.active);
+                onStreetViewChange(state); // 원본 콜백 호출
+              },
             }).then(() => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
+              
+              // 🆕 거리뷰 관련 ref 설정 (기존 코드 호환성)
+              if (provider instanceof GoogleMapProvider) {
+                googlePanoInstanceRef.current = provider.getPanoramaInstance();
+                googleCoverageLayerRef.current = provider.getCoverageLayer();
+              }
+              
               setSdkLoaded(true);
             }).catch((error) => {
               console.error('GoogleMapProvider initialization failed:', error);
@@ -1702,7 +1716,16 @@ const MapPane: React.FC<MapPaneProps> = ({
     // 현재 거리뷰 위치와 동일하면 무시 (무한 루프 방지)
     if (isStreetViewActive) {
       let currentLat = 0, currentLng = 0;
-      if (config.type === 'google' && googlePanoInstanceRef.current && googlePanoInstanceRef.current.getPosition()) {
+      // 🆕 새 Provider 시스템 사용 시
+      if (useNewProvider && mapProviderRef.current && config.type === 'google' && mapProviderRef.current instanceof GoogleMapProvider) {
+        const panorama = mapProviderRef.current.getPanoramaInstance();
+        if (panorama && panorama.getPosition()) {
+          const pos = panorama.getPosition();
+          currentLat = pos.lat();
+          currentLng = pos.lng();
+        }
+      } else if (config.type === 'google' && googlePanoInstanceRef.current && googlePanoInstanceRef.current.getPosition()) {
+        // 기존 방식
         const pos = googlePanoInstanceRef.current.getPosition();
         currentLat = pos.lat();
         currentLng = pos.lng();
@@ -1724,8 +1747,12 @@ const MapPane: React.FC<MapPaneProps> = ({
     
     // 현재 패널이 이미 거리뷰를 보고 있지 않은 경우에만 동기화
     if (!isStreetViewActive) {
-      if (config.type === 'google' && googlePanoInstanceRef.current) {
-        // 구글맵 거리뷰 시작
+      // 🆕 새 Provider 시스템 사용 시
+      if (useNewProvider && mapProviderRef.current && config.type === 'google' && mapProviderRef.current instanceof GoogleMapProvider) {
+        mapProviderRef.current.startStreetView(lat, lng);
+        setIsStreetViewActive(true);
+      } else if (config.type === 'google' && googlePanoInstanceRef.current) {
+        // 기존 방식
         googlePanoInstanceRef.current.setPosition({ lat, lng });
         googlePanoInstanceRef.current.setVisible(true);
         setIsStreetViewActive(true);
@@ -1956,7 +1983,11 @@ const MapPane: React.FC<MapPaneProps> = ({
       }
     } else {
       // 이미 거리뷰가 활성화된 경우 위치만 업데이트
-      if (config.type === 'google' && googlePanoInstanceRef.current) {
+      // 🆕 새 Provider 시스템 사용 시
+      if (useNewProvider && mapProviderRef.current && config.type === 'google' && mapProviderRef.current instanceof GoogleMapProvider) {
+        mapProviderRef.current.setStreetViewPosition(lat, lng);
+      } else if (config.type === 'google' && googlePanoInstanceRef.current) {
+        // 기존 방식
         googlePanoInstanceRef.current.setPosition({ lat, lng });
       } else if (config.type === 'kakao' && kakaoGisRef.current.rv && kakaoGisRef.current.rvClient) {
         const pos = new window.kakao.maps.LatLng(lat, lng);
@@ -3019,8 +3050,15 @@ const MapPane: React.FC<MapPaneProps> = ({
     setIsStreetViewActive(false);
     onStreetViewChange(null); // 거리뷰 상태 초기화 (동기화를 위해)
     if (config.type === 'google') {
-      if (googlePanoInstanceRef.current) googlePanoInstanceRef.current.setVisible(false);
-      if (googleCoverageLayerRef.current) googleCoverageLayerRef.current.setMap(null);
+      // 🆕 새 Provider 시스템 사용 시
+      if (useNewProvider && mapProviderRef.current && mapProviderRef.current instanceof GoogleMapProvider) {
+        mapProviderRef.current.stopStreetView();
+        if (googleCoverageLayerRef.current) googleCoverageLayerRef.current.setMap(null);
+      } else {
+        // 기존 방식
+        if (googlePanoInstanceRef.current) googlePanoInstanceRef.current.setVisible(false);
+        if (googleCoverageLayerRef.current) googleCoverageLayerRef.current.setMap(null);
+      }
     }
     // Fix: Clean up Kakao Roadview overlays/handlers
     if (config.type === 'kakao' && mapRef.current) {

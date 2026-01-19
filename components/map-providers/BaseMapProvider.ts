@@ -7,6 +7,8 @@ export interface MapProviderConfig {
   initialState: MapState;
   isSatellite: boolean;
   onStateChange: (state: MapState) => void;
+  panoContainer?: HTMLElement; // 🆕 거리뷰용 컨테이너 (Google Maps용)
+  onStreetViewChange?: (state: { lat: number; lng: number; active: boolean } | null) => void; // 🆕 거리뷰 상태 변경 콜백
 }
 
 export interface MapCapabilities {
