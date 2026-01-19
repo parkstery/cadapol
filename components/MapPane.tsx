@@ -170,16 +170,17 @@ const MapPane: React.FC<MapPaneProps> = ({
               }
               layerManagerRef.current.setMapProvider(provider);
               
-              // 🆕 지적 레이어 추가 (Kakao Maps에서만)
-              if (config.type === 'kakao') {
-                const cadastralLayer = new CadastralLayer();
-                const cadastralConfig = createDefaultLayerConfig(
-                  LayerType.CADASTRAL,
-                  '지적 경계',
-                  { visible: false } // 기본적으로 숨김
-                );
-                layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
-              }
+              // 🆕 지적 레이어 추가 (Kakao Maps에서만) - 현재 비활성화 (기존 기능 우선)
+              // TODO: 향후 CadastralLayer를 활성화할 때는 기존 setupKakaoAddressClick과 충돌하지 않도록 수정 필요
+              // if (config.type === 'kakao') {
+              //   const cadastralLayer = new CadastralLayer();
+              //   const cadastralConfig = createDefaultLayerConfig(
+              //     LayerType.CADASTRAL,
+              //     '지적 경계',
+              //     { visible: false } // 기본적으로 숨김
+              //   );
+              //   layerManagerRef.current.addLayer(cadastralLayer, cadastralConfig);
+              // }
               
               // 🆕 길찾기 관리자 초기화
               if (!routingManagerRef.current) {
@@ -1366,7 +1367,13 @@ const MapPane: React.FC<MapPaneProps> = ({
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
 
-      if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
+      // 에러 응답 확인
+      if (data.response && data.response.status === 'ERROR') {
+        console.error("Step2: VWorld API Error", data.response.error);
+        return;
+      }
+
+      if (data.response && data.response.status === 'OK' && data.response.result && data.response.result.featureCollection && data.response.result.featureCollection.features && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         if (feature.geometry) {
           console.log("Step2: Geometry retrieved", feature.geometry.type);
