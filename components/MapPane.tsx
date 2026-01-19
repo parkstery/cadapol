@@ -416,7 +416,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     setupMapListeners('naver');
   };
 
-  // 카카오맵 방향 표시 폴리곤 생성 (원뿔형)
+  // 카카오맵 방향 표시 폴리곤 생성 (부채 모양)
   const createKakaoDirectionPolygon = useCallback((centerPos: any, angle: number, map: any) => {
     // 기존 폴리곤 제거
     if (kakaoGisRef.current.directionPolygon) {
@@ -424,10 +424,11 @@ const MapPane: React.FC<MapPaneProps> = ({
       kakaoGisRef.current.directionPolygon = null;
     }
 
-    // 원뿔형 폴리곤 파라미터
-    const coneRadiusMeters = 50; // 약 50m
-    const coneAngle = 60; // 원뿔 각도 (도)
-    const coneHalfAngle = coneAngle / 2; // 원뿔 반각
+    // 부채꼴 폴리곤 파라미터
+    const fanRadiusMeters = 50; // 약 50m
+    const fanAngle = 60; // 부채 각도 (도)
+    const fanHalfAngle = fanAngle / 2; // 부채 반각
+    const numPoints = 20; // 호를 그리기 위한 점의 개수
 
     // 중심점 좌표
     const centerLat = centerPos.getLat();
@@ -436,34 +437,28 @@ const MapPane: React.FC<MapPaneProps> = ({
     // 미터를 위도/경도로 변환 (지구 곡률 고려)
     const latToMeters = 111320; // 1도 위도 ≈ 111,320m
     const lngToMeters = 111320 * Math.cos(centerLat * Math.PI / 180); // 경도는 위도에 따라 다름
-    const coneRadiusLat = coneRadiusMeters / latToMeters;
-    const coneRadiusLng = coneRadiusMeters / lngToMeters;
+    const fanRadiusLat = fanRadiusMeters / latToMeters;
+    const fanRadiusLng = fanRadiusMeters / lngToMeters;
 
     // 방향 각도를 라디안으로 변환 (카카오맵은 시계방향, 북쪽이 0도)
-    // 카카오맵 각도: 북쪽 0도, 시계방향 증가
-    // walker와 동일한 방향을 위해 각도를 그대로 사용 (변환 없음)
     const angleRad = (angle * Math.PI) / 180;
 
-    // 원뿔 끝점 계산 (방향으로 coneRadius만큼 이동)
-    // 북쪽이 0도이므로, 북쪽 방향은 위쪽(위도 증가), 동쪽 방향은 오른쪽(경도 증가)
-    const endLat = centerLat + coneRadiusLat * Math.cos(angleRad);
-    const endLng = centerLng + coneRadiusLng * Math.sin(angleRad);
-    const endPos = new window.kakao.maps.LatLng(endLat, endLng);
+    // 부채꼴 경로 생성
+    const path = [centerPos]; // 중심점에서 시작
 
-    // 원뿔 좌우 끝점 계산 (원뿔의 30% 지점)
-    const leftAngleRad = angleRad - (coneHalfAngle * Math.PI) / 180;
-    const rightAngleRad = angleRad + (coneHalfAngle * Math.PI) / 180;
+    // 시작 각도와 끝 각도 계산
+    const startAngleRad = angleRad - (fanHalfAngle * Math.PI) / 180;
+    const endAngleRad = angleRad + (fanHalfAngle * Math.PI) / 180;
 
-    const leftLat = centerLat + coneRadiusLat * 0.3 * Math.cos(leftAngleRad);
-    const leftLng = centerLng + coneRadiusLng * 0.3 * Math.sin(leftAngleRad);
-    const leftPos = new window.kakao.maps.LatLng(leftLat, leftLng);
-
-    const rightLat = centerLat + coneRadiusLat * 0.3 * Math.cos(rightAngleRad);
-    const rightLng = centerLng + coneRadiusLng * 0.3 * Math.sin(rightAngleRad);
-    const rightPos = new window.kakao.maps.LatLng(rightLat, rightLng);
-
-    // 원뿔형 폴리곤 경로 (역삼각형: 중심점 -> 좌측 -> 끝점 -> 우측 -> 중심점)
-    const path = [centerPos, leftPos, endPos, rightPos, centerPos];
+    // 호를 따라 점들을 생성 (끝점에서 중심점 방향으로)
+    for (let i = numPoints; i >= 0; i--) {
+      const t = i / numPoints;
+      const currentAngleRad = startAngleRad + (endAngleRad - startAngleRad) * t;
+      
+      const pointLat = centerLat + fanRadiusLat * Math.cos(currentAngleRad);
+      const pointLng = centerLng + fanRadiusLng * Math.sin(currentAngleRad);
+      path.push(new window.kakao.maps.LatLng(pointLat, pointLng));
+    }
 
     // 폴리곤 생성
     kakaoGisRef.current.directionPolygon = new window.kakao.maps.Polygon({
@@ -472,8 +467,8 @@ const MapPane: React.FC<MapPaneProps> = ({
       strokeWeight: 0,
       strokeColor: '#e24a4a',
       strokeOpacity: 0,
-      fillColor: '##e24a4a',
-      fillOpacity: 0.3, // 반투명 파란색
+      fillColor: '#e24a4a',
+      fillOpacity: 0.3, // 반투명 빨간색
       zIndex: 999 // walker 아래에 표시
     });
   }, []);
@@ -569,7 +564,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     img.src = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/walker.png';
   }, [createKakaoDirectionPolygon]);
 
-  // 네이버맵 방향 표시 폴리곤 생성 (원뿔형)
+  // 네이버맵 방향 표시 폴리곤 생성 (부채 모양)
   const createNaverDirectionPolygon = useCallback((centerPos: any, angle: number, map: any) => {
     // 기존 폴리곤 제거
     if (naverDirectionPolygonRef.current) {
@@ -577,10 +572,11 @@ const MapPane: React.FC<MapPaneProps> = ({
       naverDirectionPolygonRef.current = null;
     }
 
-    // 원뿔형 폴리곤 파라미터
-    const coneRadiusMeters = 50; // 약 50m
-    const coneAngle = 60; // 원뿔 각도 (도)
-    const coneHalfAngle = coneAngle / 2; // 원뿔 반각
+    // 부채꼴 폴리곤 파라미터
+    const fanRadiusMeters = 50; // 약 50m
+    const fanAngle = 60; // 부채 각도 (도)
+    const fanHalfAngle = fanAngle / 2; // 부채 반각
+    const numPoints = 20; // 호를 그리기 위한 점의 개수
 
     // 중심점 좌표
     const centerLat = centerPos.lat();
@@ -589,34 +585,28 @@ const MapPane: React.FC<MapPaneProps> = ({
     // 미터를 위도/경도로 변환 (지구 곡률 고려)
     const latToMeters = 111320; // 1도 위도 ≈ 111,320m
     const lngToMeters = 111320 * Math.cos(centerLat * Math.PI / 180); // 경도는 위도에 따라 다름
-    const coneRadiusLat = coneRadiusMeters / latToMeters;
-    const coneRadiusLng = coneRadiusMeters / lngToMeters;
+    const fanRadiusLat = fanRadiusMeters / latToMeters;
+    const fanRadiusLng = fanRadiusMeters / lngToMeters;
 
     // 방향 각도를 라디안으로 변환 (네이버맵은 시계방향, 북쪽이 0도)
-    // 네이버맵 각도: 북쪽 0도, 시계방향 증가
-    // 빨간 삼각형 마커와 동일한 방향을 위해 각도를 그대로 사용 (변환 없음)
     const angleRad = (angle * Math.PI) / 180;
 
-    // 원뿔 끝점 계산 (방향으로 coneRadius만큼 이동)
-    // 북쪽이 0도이므로, 북쪽 방향은 위쪽(위도 증가), 동쪽 방향은 오른쪽(경도 증가)
-    const endLat = centerLat + coneRadiusLat * Math.cos(angleRad);
-    const endLng = centerLng + coneRadiusLng * Math.sin(angleRad);
-    const endPos = new window.naver.maps.LatLng(endLat, endLng);
+    // 부채꼴 경로 생성
+    const path = [centerPos]; // 중심점에서 시작
 
-    // 원뿔 좌우 끝점 계산 (원뿔의 30% 지점)
-    const leftAngleRad = angleRad - (coneHalfAngle * Math.PI) / 180;
-    const rightAngleRad = angleRad + (coneHalfAngle * Math.PI) / 180;
+    // 시작 각도와 끝 각도 계산
+    const startAngleRad = angleRad - (fanHalfAngle * Math.PI) / 180;
+    const endAngleRad = angleRad + (fanHalfAngle * Math.PI) / 180;
 
-    const leftLat = centerLat + coneRadiusLat * 0.3 * Math.cos(leftAngleRad);
-    const leftLng = centerLng + coneRadiusLng * 0.3 * Math.sin(leftAngleRad);
-    const leftPos = new window.naver.maps.LatLng(leftLat, leftLng);
-
-    const rightLat = centerLat + coneRadiusLat * 0.3 * Math.cos(rightAngleRad);
-    const rightLng = centerLng + coneRadiusLng * 0.3 * Math.sin(rightAngleRad);
-    const rightPos = new window.naver.maps.LatLng(rightLat, rightLng);
-
-    // 원뿔형 폴리곤 경로 (역삼각형: 중심점 -> 좌측 -> 끝점 -> 우측 -> 중심점)
-    const path = [centerPos, leftPos, endPos, rightPos, centerPos];
+    // 호를 따라 점들을 생성 (끝점에서 중심점 방향으로)
+    for (let i = numPoints; i >= 0; i--) {
+      const t = i / numPoints;
+      const currentAngleRad = startAngleRad + (endAngleRad - startAngleRad) * t;
+      
+      const pointLat = centerLat + fanRadiusLat * Math.cos(currentAngleRad);
+      const pointLng = centerLng + fanRadiusLng * Math.sin(currentAngleRad);
+      path.push(new window.naver.maps.LatLng(pointLat, pointLng));
+    }
 
     // 폴리곤 생성
     naverDirectionPolygonRef.current = new window.naver.maps.Polygon({
@@ -727,19 +717,23 @@ const MapPane: React.FC<MapPaneProps> = ({
         // 거리뷰 상태 업데이트 (동기화를 위해)
         onStreetViewChange({ lat, lng, active: true });
         
-        // Sync Map Center - 미니맵 중앙으로 이동
+        // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
         if (mapRef.current) {
           mapRef.current.setCenter(pos);
         }
+        
         // Sync Marker - 미니맵 중앙에 위치 (삼각형 마커, 방향 동기화)
-        if (naverMarkerRef.current) {
+        if (naverMarkerRef.current && mapRef.current) {
+          // 마커 위치를 중앙으로 업데이트
           naverMarkerRef.current.setPosition(pos);
           // 방향 동기화: 거리뷰 방향에 따라 마커 회전
           naverMarkerRef.current.setIcon(createNaverTriangleMarker(angle));
           if (typeof naverMarkerRef.current.setAngle === 'function') {
             naverMarkerRef.current.setAngle(angle);
           }
-        } else {
+          // 마커가 지도에 표시되도록 보장
+          naverMarkerRef.current.setMap(mapRef.current);
+        } else if (mapRef.current) {
           // 마커가 없으면 생성 (삼각형 마커, 방향 포함)
           const icon = createNaverTriangleMarker(angle);
           naverMarkerRef.current = new window.naver.maps.Marker({
@@ -760,6 +754,11 @@ const MapPane: React.FC<MapPaneProps> = ({
         const pov = pano.getPov();
         const angle = pov ? pov.pan : 0;
         const pos = pano.getPosition();
+        
+        // Sync Map Center - 미니맵 중앙으로 이동 (마커가 항상 중앙에 유지되도록)
+        if (mapRef.current && pos) {
+          mapRef.current.setCenter(pos);
+        }
         
         if (naverMarkerRef.current && mapRef.current && pos) {
           // 새로운 아이콘 생성 (각도 반영)
@@ -2492,7 +2491,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       {config.type === 'naver' && !isStreetViewActive && (
         <button 
           onClick={toggleNaverStreetLayer} 
-          className={`absolute top-4 z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          className={`absolute top-4 right-4 z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
           title={isNaverLayerOn ? '거리뷰 끄기' : '거리뷰 켜기'}
         >
           <img src="/streetview-icon.png" alt="거리뷰" className="w-5 h-5 object-contain" />
