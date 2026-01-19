@@ -1963,9 +1963,67 @@ const MapPane: React.FC<MapPaneProps> = ({
     if (!isStreetViewActive) {
       if (config.type === 'google' && googlePanoInstanceRef.current) {
         // 구글맵 거리뷰 시작
+        // 컨테이너가 제대로 렌더링되었는지 확인
+        if (googlePanoRef.current) {
+          // 컨테이너 스타일 보장
+          googlePanoRef.current.style.display = 'block';
+          googlePanoRef.current.style.position = 'absolute';
+          googlePanoRef.current.style.top = '0';
+          googlePanoRef.current.style.left = '0';
+          googlePanoRef.current.style.right = '0';
+          googlePanoRef.current.style.bottom = '0';
+          googlePanoRef.current.style.width = '100%';
+          googlePanoRef.current.style.height = '100%';
+          googlePanoRef.current.style.margin = '0';
+          googlePanoRef.current.style.padding = '0';
+          googlePanoRef.current.style.boxSizing = 'border-box';
+        }
+        
+        // 파노라마 위치 설정 및 표시
         googlePanoInstanceRef.current.setPosition({ lat, lng });
-        googlePanoInstanceRef.current.setVisible(true);
-        setIsStreetViewActive(true);
+        
+        // 파노라마가 로드될 때까지 대기
+        const panorama = googlePanoInstanceRef.current;
+        if (window.google && window.google.maps) {
+          const statusListener = panorama.addListener('status_changed', () => {
+            const status = panorama.getStatus();
+            if (status === 'OK') {
+              panorama.setVisible(true);
+              setIsStreetViewActive(true);
+              // Coverage Layer 표시
+              if (googleCoverageLayerRef.current && mapRef.current) {
+                googleCoverageLayerRef.current.setMap(mapRef.current);
+              }
+              // 리스너 제거
+              window.google.maps.event.removeListener(statusListener);
+            } else if (status === 'ZERO_RESULTS' || status === 'NOT_FOUND') {
+              console.warn('Google Street View: 해당 위치에 거리뷰 이미지가 없습니다', { lat, lng });
+              setIsStreetViewActive(false);
+              window.google.maps.event.removeListener(statusListener);
+            } else if (status === 'ERROR') {
+              console.error('Google Street View: 로드 오류', { lat, lng });
+              setIsStreetViewActive(false);
+              window.google.maps.event.removeListener(statusListener);
+            }
+          });
+          
+          // 타임아웃 설정 (5초 후에도 로드되지 않으면 실패로 처리)
+          setTimeout(() => {
+            if (panorama.getStatus() !== 'OK') {
+              console.warn('Google Street View: 로드 타임아웃', { lat, lng });
+              setIsStreetViewActive(false);
+              try {
+                window.google.maps.event.removeListener(statusListener);
+              } catch (e) {
+                // 이미 제거된 경우 무시
+              }
+            }
+          }, 5000);
+        } else {
+          // SDK가 로드되지 않은 경우 즉시 표시 시도
+          panorama.setVisible(true);
+          setIsStreetViewActive(true);
+        }
       } else if (config.type === 'kakao' && kakaoGisRef.current.rvClient) {
         // 카카오맵 로드뷰 시작
         const pos = new window.kakao.maps.LatLng(lat, lng);
@@ -3357,8 +3415,21 @@ const MapPane: React.FC<MapPaneProps> = ({
       {/* 2. Street View Containers */}
       <div 
         ref={googlePanoRef}
-        className={`absolute inset-0 bg-black transition-opacity duration-300 
-           ${config.type === 'google' && isStreetViewActive ? 'z-10 opacity-100 pointer-events-auto' : 'z-[-1] opacity-0 pointer-events-none'}`} 
+        className={`absolute bg-black transition-opacity duration-300 
+           ${config.type === 'google' && isStreetViewActive ? 'z-10 opacity-100 pointer-events-auto' : 'z-[-1] opacity-0 pointer-events-none'}`}
+        style={{
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          width: '100%',
+          height: '100%',
+          margin: 0,
+          padding: 0,
+          boxSizing: 'border-box',
+          display: config.type === 'google' ? 'block' : 'none'
+        }}
       />
 
       <div 
