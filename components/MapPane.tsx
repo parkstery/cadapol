@@ -432,14 +432,52 @@ const MapPane: React.FC<MapPaneProps> = ({
     }
     // Clear Kakao Resources
     if (config.type !== 'kakao') {
-      clearKakaoDrawingResources();
-      if (kakaoGisRef.current.walkerOverlay) {
-          kakaoGisRef.current.walkerOverlay.setMap(null);
+      // 카카오맵 리소스 정리 (순서 중요)
+      try {
+        // 먼저 이벤트 리스너 정리
+        if (kakaoGisRef.current.addressClickListener && mapRef.current) {
+          try {
+            window.kakao.maps.event.removeListener(mapRef.current, 'click', kakaoGisRef.current.addressClickListener);
+          } catch (e) {
+            // 이미 제거된 경우 무시
+          }
+          kakaoGisRef.current.addressClickListener = null;
+        }
+        
+        // 오버레이 및 폴리곤 정리
+        if (kakaoGisRef.current.walkerOverlay) {
+          try {
+            kakaoGisRef.current.walkerOverlay.setMap(null);
+          } catch (e) {}
           kakaoGisRef.current.walkerOverlay = null;
-      }
-      if (kakaoGisRef.current.directionPolygon) {
-          kakaoGisRef.current.directionPolygon.setMap(null);
+        }
+        if (kakaoGisRef.current.directionPolygon) {
+          try {
+            kakaoGisRef.current.directionPolygon.setMap(null);
+          } catch (e) {}
           kakaoGisRef.current.directionPolygon = null;
+        }
+        if (kakaoGisRef.current.cadastralOverlay) {
+          try {
+            kakaoGisRef.current.cadastralOverlay.setMap(null);
+          } catch (e) {}
+          kakaoGisRef.current.cadastralOverlay = null;
+        }
+        
+        // 그리기 리소스 정리
+        clearKakaoDrawingResources();
+        
+        // 기타 리소스 정리
+        if (kakaoGisRef.current.rv) {
+          try {
+            kakaoGisRef.current.rv = null;
+          } catch (e) {}
+        }
+        kakaoGisRef.current.geocoder = null;
+        kakaoGisRef.current.rvClient = null;
+        kakaoGisRef.current.roadviewLayer = false;
+      } catch (e) {
+        console.warn('Kakao resources cleanup error:', e);
       }
     }
   }, [config.type]);
@@ -1790,11 +1828,23 @@ const MapPane: React.FC<MapPaneProps> = ({
           mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
           mapRef.current.setZoom(globalState.zoom);
         } else if (config.type === 'kakao') {
-          const center = mapRef.current.getCenter();
-          if (Math.abs(center.getLat() - globalState.lat) > 0.000001 || Math.abs(center.getLng() - globalState.lng) > 0.000001) {
-             mapRef.current.setCenter(new window.kakao.maps.LatLng(globalState.lat, globalState.lng));
+          // 카카오맵이 완전히 초기화되었는지 확인
+          if (mapRef.current && typeof mapRef.current.getCenter === 'function') {
+            try {
+              const center = mapRef.current.getCenter();
+              if (center && typeof center.getLat === 'function' && typeof center.getLng === 'function') {
+                const centerLat = center.getLat();
+                const centerLng = center.getLng();
+                if (Math.abs(centerLat - globalState.lat) > 0.000001 || Math.abs(centerLng - globalState.lng) > 0.000001) {
+                  mapRef.current.setCenter(new window.kakao.maps.LatLng(globalState.lat, globalState.lng));
+                }
+                mapRef.current.setLevel(zoomToKakao(globalState.zoom));
+              }
+            } catch (e) {
+              // 맵이 아직 완전히 초기화되지 않은 경우 무시
+              console.warn('Kakao map not ready for getCenter:', e);
+            }
           }
-          mapRef.current.setLevel(zoomToKakao(globalState.zoom));
         } else if (config.type === 'naver') {
           mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
           mapRef.current.setZoom(globalState.zoom);
@@ -1808,18 +1858,31 @@ const MapPane: React.FC<MapPaneProps> = ({
   useEffect(() => {
     if (!mapRef.current || !sdkLoaded) return;
     
-    // 기존 방식 사용 (Provider 시스템은 맵 타입 변경 시 문제가 있으므로 기존 방식 사용)
-    try {
-      if (config.type === 'google') {
-        mapRef.current.setMapTypeId(config.isSatellite ? 'satellite' : 'roadmap');
-      } else if (config.type === 'kakao') {
-        mapRef.current.setMapTypeId(config.isSatellite ? window.kakao.maps.MapTypeId.HYBRID : window.kakao.maps.MapTypeId.ROADMAP);
-      } else if (config.type === 'naver') {
-        mapRef.current.setMapTypeId(config.isSatellite ? window.naver.maps.MapTypeId.SATELLITE : window.naver.maps.MapTypeId.NORMAL);
+    // 맵 타입이 실제로 변경되었는지 확인 (초기화 직후에는 변경하지 않음)
+    const timer = setTimeout(() => {
+      try {
+        if (config.type === 'google' && window.google && window.google.maps) {
+          const mapTypeId = config.isSatellite ? 'satellite' : 'roadmap';
+          if (typeof mapRef.current?.setMapTypeId === 'function') {
+            mapRef.current.setMapTypeId(mapTypeId);
+          }
+        } else if (config.type === 'kakao' && window.kakao && window.kakao.maps) {
+          const mapTypeId = config.isSatellite ? window.kakao.maps.MapTypeId.HYBRID : window.kakao.maps.MapTypeId.ROADMAP;
+          if (typeof mapRef.current?.setMapTypeId === 'function') {
+            mapRef.current.setMapTypeId(mapTypeId);
+          }
+        } else if (config.type === 'naver' && window.naver && window.naver.maps) {
+          const mapTypeId = config.isSatellite ? window.naver.maps.MapTypeId.SATELLITE : window.naver.maps.MapTypeId.NORMAL;
+          if (typeof mapRef.current?.setMapTypeId === 'function') {
+            mapRef.current.setMapTypeId(mapTypeId);
+          }
+        }
+      } catch(e) {
+        console.error('Map type change error:', e);
       }
-    } catch(e) {
-      console.error('Map type change error:', e);
-    }
+    }, 100); // 맵 초기화 후 약간의 지연
+    
+    return () => clearTimeout(timer);
   }, [config.isSatellite, config.type, sdkLoaded]);
 
   useEffect(() => {
@@ -3199,19 +3262,41 @@ const MapPane: React.FC<MapPaneProps> = ({
   }, [isNaverLayerOn]);
 
   const clearKakaoDrawingResources = () => {
-      kakaoDrawingRef.current.polylines.forEach(p => p.setMap(null));
-      kakaoDrawingRef.current.polygons.forEach(p => p.setMap(null));
-      kakaoDrawingRef.current.overlays.forEach(o => o.setMap(null));
-      kakaoDrawingRef.current.listeners.forEach(fn => {
-        try {
-          if (typeof fn === 'function') {
-            fn();
+      try {
+        kakaoDrawingRef.current.polylines.forEach(p => {
+          try {
+            if (p && typeof p.setMap === 'function') {
+              p.setMap(null);
+            }
+          } catch (e) {}
+        });
+        kakaoDrawingRef.current.polygons.forEach(p => {
+          try {
+            if (p && typeof p.setMap === 'function') {
+              p.setMap(null);
+            }
+          } catch (e) {}
+        });
+        kakaoDrawingRef.current.overlays.forEach(o => {
+          try {
+            if (o && typeof o.setMap === 'function') {
+              o.setMap(null);
+            }
+          } catch (e) {}
+        });
+        kakaoDrawingRef.current.listeners.forEach(fn => {
+          try {
+            if (typeof fn === 'function') {
+              fn();
+            }
+          } catch (error) {
+            // 이미 제거된 리스너인 경우 무시
           }
-        } catch (error) {
-          // 이미 제거된 리스너인 경우 무시
-        }
-      });
-      kakaoDrawingRef.current = { polylines: [], polygons: [], overlays: [], listeners: [] };
+        });
+        kakaoDrawingRef.current = { polylines: [], polygons: [], overlays: [], listeners: [] };
+      } catch (e) {
+        console.warn('clearKakaoDrawingResources error:', e);
+      }
   };
 
   const closeStreetView = () => {
