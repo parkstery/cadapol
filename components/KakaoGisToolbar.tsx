@@ -50,13 +50,16 @@ const KakaoGisToolbar: React.FC<KakaoGisToolbarProps> = ({ activeMode, onAction,
       >
         📐
       </button>
-      <button 
-        onClick={() => onAction(GISMode.ROADVIEW)}
-        title="로드뷰"
-        className={`w-9 h-8 flex items-center justify-center transition-colors ${activeMode === GISMode.ROADVIEW ? 'bg-blue-100' : 'hover:bg-gray-50'}`}
-      >
-        <img src="/streetview-icon.png" alt="로드뷰" className="w-5 h-5 object-contain" />
-      </button>
+      {/* 로드뷰 버튼 (미니맵 활성화 시 숨김) */}
+      {!isStreetViewActive && (
+        <button
+          onClick={() => onAction(GISMode.ROADVIEW)}
+          title="로드뷰"
+          className={`w-9 h-8 flex items-center justify-center transition-colors ${activeMode === GISMode.ROADVIEW ? 'bg-blue-100' : 'hover:bg-gray-50'}`}
+        >
+          <img src="/streetview-icon.png" alt="로드뷰" className="w-5 h-5 object-contain" />
+        </button>
+      )}
     </div>
   );
 };

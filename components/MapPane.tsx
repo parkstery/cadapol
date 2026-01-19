@@ -2488,11 +2488,11 @@ const MapPane: React.FC<MapPaneProps> = ({
         )}
       </button>
       
-      {/* 네이버 거리뷰 버튼 - 우상단 배치 */}
-      {config.type === 'naver' && (
+      {/* 네이버 거리뷰 버튼 - 우상단 배치 (미니맵 활성화 시 숨김) */}
+      {config.type === 'naver' && !isStreetViewActive && (
         <button 
           onClick={toggleNaverStreetLayer} 
-          className={`absolute top-4 z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isStreetViewActive ? 'right-[84px]' : 'right-4'} ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          className={`absolute top-4 z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
           title={isNaverLayerOn ? '거리뷰 끄기' : '거리뷰 켜기'}
         >
           <img src="/streetview-icon.png" alt="거리뷰" className="w-5 h-5 object-contain" />
