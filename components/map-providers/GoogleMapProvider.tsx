@@ -163,6 +163,14 @@ export class GoogleMapProvider implements MapProvider {
   syncState(state: MapState): void {
     if (!this.map || this.isProgrammaticUpdate) return;
     
+    // 좌표 유효성 검증
+    if (typeof state.lat !== 'number' || typeof state.lng !== 'number' || 
+        isNaN(state.lat) || isNaN(state.lng) || 
+        !isFinite(state.lat) || !isFinite(state.lng)) {
+      console.warn('GoogleMapProvider syncState: 유효하지 않은 좌표', state);
+      return;
+    }
+    
     this.isProgrammaticUpdate = true;
     
     try {

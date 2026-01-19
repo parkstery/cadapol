@@ -1772,26 +1772,20 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // 4. Update Effects
   useEffect(() => {
-    // 🆕 새 Provider 시스템 사용 시
-    if (useNewProvider && mapProviderRef.current) {
-      if (isDragging.current) return;
-      mapProviderRef.current.syncState(globalState);
+    // 기존 방식 사용 (Provider 시스템은 좌표 검증 문제가 있으므로 기존 방식 사용)
+    if (!mapRef.current || !sdkLoaded) return;
+    if (isDragging.current) return;
+    
+    // 좌표 유효성 검증
+    if (typeof globalState.lat !== 'number' || typeof globalState.lng !== 'number' || 
+        isNaN(globalState.lat) || isNaN(globalState.lng) || 
+        !isFinite(globalState.lat) || !isFinite(globalState.lng)) {
+      console.warn('Global State: 유효하지 않은 좌표', globalState);
       return;
     }
     
-    // 기존 방식 (Kakao, Naver, 또는 Provider 실패 시)
-    if (!mapRef.current) return;
-    if (isDragging.current) return;
     isProgrammaticUpdate.current = true;
     try {
-        // 좌표 유효성 검증
-        if (typeof globalState.lat !== 'number' || typeof globalState.lng !== 'number' || 
-            isNaN(globalState.lat) || isNaN(globalState.lng) || 
-            !isFinite(globalState.lat) || !isFinite(globalState.lng)) {
-          console.warn('Global State: 유효하지 않은 좌표', globalState);
-          return;
-        }
-        
         if (config.type === 'google') {
           mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
           mapRef.current.setZoom(globalState.zoom);
@@ -1805,7 +1799,9 @@ const MapPane: React.FC<MapPaneProps> = ({
           mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
           mapRef.current.setZoom(globalState.zoom);
         }
-    } catch(e) {}
+    } catch(e) {
+      console.error('Map state update error:', e);
+    }
     setTimeout(() => { isProgrammaticUpdate.current = false; }, 200); 
   }, [globalState.lat, globalState.lng, globalState.zoom, config.type, sdkLoaded]);
 
