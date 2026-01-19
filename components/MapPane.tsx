@@ -1763,15 +1763,22 @@ const MapPane: React.FC<MapPaneProps> = ({
                     floatingOverlay = null;
                 }
                 
-                // 전체 거리 표시 및 close 버튼
-                const closeBtn = document.createElement('button');
-                closeBtn.innerHTML = '✕';
-                closeBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                // 전체 거리 표시 및 버튼들
+                const textCloseBtn = document.createElement('button');
+                textCloseBtn.innerHTML = '✕';
+                textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                textCloseBtn.title = '텍스트 박스 닫기';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                deleteBtn.title = '측정 객체 삭제';
                 
                 const content = document.createElement('div');
                 content.style.position = 'relative';
                 content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #FF3333; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#FF3333;">총 거리: ${totalLength}m</div>`;
-                content.appendChild(closeBtn);
+                content.appendChild(textCloseBtn);
+                content.appendChild(deleteBtn);
                 
                 const totalOverlay = new window.kakao.maps.CustomOverlay({
                     map: map,
@@ -1782,8 +1789,19 @@ const MapPane: React.FC<MapPaneProps> = ({
                 });
                 kakaoDrawingRef.current.overlays.push(totalOverlay);
                 
-                // closeBtn의 onclick 설정 (totalOverlay 및 모든 참조 포함)
-                closeBtn.onclick = () => {
+                // 텍스트 박스 닫기 버튼 (오버레이만 삭제)
+                textCloseBtn.onclick = () => {
+                    if (totalOverlay) {
+                        totalOverlay.setMap(null);
+                        const totalOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(totalOverlay);
+                        if (totalOverlayIndex > -1) {
+                            kakaoDrawingRef.current.overlays.splice(totalOverlayIndex, 1);
+                        }
+                    }
+                };
+                
+                // 측정 객체 삭제 버튼 (폴리라인 및 모든 관련 요소 삭제)
+                deleteBtn.onclick = () => {
                     // 폴리라인 삭제
                     if (currentLine) {
                         currentLine.setMap(null);
@@ -1823,8 +1841,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                             kakaoDrawingRef.current.polylines.splice(floatingLineIndex, 1);
                         }
                     }
-                    map.setCursor('default');
-                    setGisMode(GISMode.DEFAULT);
                 };
                 
                 map.setCursor('default');
@@ -1987,15 +2003,22 @@ const MapPane: React.FC<MapPaneProps> = ({
                         floatingOverlay = null;
                     }
                     
-                    // 면적 표시 및 close 버튼
-                    const closeBtn = document.createElement('button');
-                    closeBtn.innerHTML = '✕';
-                    closeBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                    // 면적 표시 및 버튼들
+                    const textCloseBtn = document.createElement('button');
+                    textCloseBtn.innerHTML = '✕';
+                    textCloseBtn.style.cssText = 'position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; background:#999; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                    textCloseBtn.title = '텍스트 박스 닫기';
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.innerHTML = '🗑️';
+                    deleteBtn.style.cssText = 'position:absolute; top:-8px; right:24px; width:20px; height:20px; border-radius:50%; background:#ff4444; color:white; border:none; cursor:pointer; font-size:12px; line-height:1; box-shadow:0 2px 4px rgba(0,0,0,0.3);';
+                    deleteBtn.title = '측정 객체 삭제';
                     
                     const content = document.createElement('div');
                     content.style.position = 'relative';
                     content.innerHTML = `<div class="measure-label" style="background:white; border:2px solid #39f; padding:6px 8px; border-radius:4px; font-size:14px; font-weight:bold; color:#39f;">면적: ${area}m²</div>`;
-                    content.appendChild(closeBtn);
+                    content.appendChild(textCloseBtn);
+                    content.appendChild(deleteBtn);
                     
                     const areaOverlay = new window.kakao.maps.CustomOverlay({
                         map: map,
@@ -2006,8 +2029,19 @@ const MapPane: React.FC<MapPaneProps> = ({
                     });
                     kakaoDrawingRef.current.overlays.push(areaOverlay);
                     
-                    // closeBtn의 onclick 설정 (areaOverlay 및 모든 참조 포함)
-                    closeBtn.onclick = () => {
+                    // 텍스트 박스 닫기 버튼 (오버레이만 삭제)
+                    textCloseBtn.onclick = () => {
+                        if (areaOverlay) {
+                            areaOverlay.setMap(null);
+                            const areaOverlayIndex = kakaoDrawingRef.current.overlays.indexOf(areaOverlay);
+                            if (areaOverlayIndex > -1) {
+                                kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
+                            }
+                        }
+                    };
+                    
+                    // 측정 객체 삭제 버튼 (폴리곤 및 모든 관련 요소 삭제)
+                    deleteBtn.onclick = () => {
                         // 폴리곤 삭제
                         if (currentPoly) {
                             currentPoly.setMap(null);
@@ -2047,8 +2081,6 @@ const MapPane: React.FC<MapPaneProps> = ({
                                 kakaoDrawingRef.current.overlays.splice(areaOverlayIndex, 1);
                             }
                         }
-                        map.setCursor('default');
-                        setGisMode(GISMode.DEFAULT);
                     };
                     
                     currentPoly = null;
@@ -2074,6 +2106,33 @@ const MapPane: React.FC<MapPaneProps> = ({
   const handleKakaoAction = useCallback((mode: GISMode) => {
      if (config.type !== 'kakao' || !mapRef.current) return;
      
+     // 토글 모드: 같은 모드를 다시 클릭하면 DEFAULT로 변경
+     if (gisMode === mode) {
+         // 거리/면적 측정 모드인 경우 토글하여 끄기
+         if (mode === GISMode.DISTANCE || mode === GISMode.AREA) {
+             setGisMode(GISMode.DEFAULT);
+             mapRef.current.setCursor('default');
+             // 측정 중인 리소스 정리
+             clearKakaoDrawingResources();
+             return;
+         }
+         // 로드뷰 모드인 경우도 토글
+         if (mode === GISMode.ROADVIEW) {
+             mapRef.current.removeOverlayMapTypeId(window.kakao.maps.MapTypeId.ROADVIEW);
+             if (kakaoGisRef.current.clickHandler) {
+                 window.kakao.maps.event.removeListener(mapRef.current, 'click', kakaoGisRef.current.clickHandler);
+                 kakaoGisRef.current.clickHandler = null;
+             }
+             if (kakaoGisRef.current.walkerOverlay) {
+                 kakaoGisRef.current.walkerOverlay.setMap(null);
+                 kakaoGisRef.current.walkerOverlay = null;
+             }
+             mapRef.current.setCursor('default');
+             setGisMode(GISMode.DEFAULT);
+             return;
+         }
+     }
+     
      // Reset previous Road View mode if active
      if (gisMode === GISMode.ROADVIEW && mode !== GISMode.ROADVIEW) {
          mapRef.current.removeOverlayMapTypeId(window.kakao.maps.MapTypeId.ROADVIEW);
@@ -2086,6 +2145,14 @@ const MapPane: React.FC<MapPaneProps> = ({
              kakaoGisRef.current.walkerOverlay = null;
          }
      }
+     
+     // Reset previous Distance/Area mode if active
+     if ((gisMode === GISMode.DISTANCE || gisMode === GISMode.AREA) && mode !== gisMode) {
+         mapRef.current.setCursor('default');
+         // 측정 중인 리소스 정리
+         clearKakaoDrawingResources();
+     }
+     
      mapRef.current.setCursor('default');
 
      if (mode === GISMode.ROADVIEW) {
