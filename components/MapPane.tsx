@@ -528,11 +528,16 @@ const MapPane: React.FC<MapPaneProps> = ({
       // 지도 리사이즈 후 Walker 재표시 보장
       setTimeout(() => {
         if (kakaoGisRef.current.walkerOverlay && map) {
+          // walker의 실제 position을 가져와서 폴리곤과 동기화
+          const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
           kakaoGisRef.current.walkerOverlay.setMap(null);
           kakaoGisRef.current.walkerOverlay.setMap(map);
-        }
-        // 폴리곤도 재표시
-        if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
+          // walker 재표시 후 폴리곤도 같은 위치로 재생성 (동기화 보장)
+          if (walkerPos && angle !== undefined) {
+            createKakaoDirectionPolygon(walkerPos, angle, map);
+          }
+        } else if (kakaoGisRef.current.directionPolygon && map && angle !== undefined) {
+          // walker가 없어도 폴리곤은 재표시
           kakaoGisRef.current.directionPolygon.setMap(null);
           createKakaoDirectionPolygon(pos, angle, map);
         }
@@ -1542,9 +1547,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                     // 기존 walker의 각도도 업데이트
                     const content = kakaoGisRef.current.walkerOverlay.getContent();
                     if (content) {
-                      content.style.transformOrigin = 'center bottom';
+                      content.style.transformOrigin = 'center center';
                       content.style.transform = `rotate(${initialAngle}deg)`;
                     }
+                    // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
+                    createKakaoDirectionPolygon(pos, initialAngle, mapRef.current);
                   }
                   
                   // 위치 변경 이벤트 리스너 (중복 방지)
@@ -1557,16 +1564,16 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const rvPos = rv.getPosition();
                     const viewpoint = rv.getViewpoint();
                     if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
+                      // walker 위치 업데이트
                       kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
                       kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                      // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트 (동기화 보장)
+                      if (viewpoint) {
+                        createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
+                      }
                     }
                     if (mapRef.current) {
                       mapRef.current.setCenter(rvPos);
-                    }
-                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
-                    if (rvPos && mapRef.current && viewpoint) {
-                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
-                      createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
                   
@@ -1584,12 +1591,9 @@ const MapPane: React.FC<MapPaneProps> = ({
                       if (rvPos && mapRef.current) {
                         kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
                         kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                        // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트 (동기화 보장)
+                        createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                       }
-                    }
-                    // 방향 표시 폴리곤 업데이트 (walker와 같은 위치 사용 보장)
-                    if (rvPos && mapRef.current && viewpoint) {
-                      // walker 위치와 동일한 위치를 사용하여 폴리곤 생성
-                      createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
                     }
                   };
                   
@@ -2555,9 +2559,11 @@ const MapPane: React.FC<MapPaneProps> = ({
                      // 기존 walker의 각도도 업데이트
                      const content = kakaoGisRef.current.walkerOverlay.getContent();
                      if (content) {
-                       content.style.transformOrigin = 'center bottom';
+                       content.style.transformOrigin = 'center center';
                        content.style.transform = `rotate(${initialAngle}deg)`;
                      }
+                     // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트
+                     createKakaoDirectionPolygon(pos, initialAngle, mapRef.current);
                    }
                    
                    // 위치 변경 이벤트 리스너 (중복 방지)
@@ -2566,54 +2572,63 @@ const MapPane: React.FC<MapPaneProps> = ({
                      window.kakao.maps.event.removeListener(kakaoGisRef.current.rv, 'viewpoint_changed');
                    }
                    
-                   const positionListener = () => {
-                     const rvPos = rv.getPosition();
-                     isDragging.current = true; 
-                     
-                     // Sync Map Center - 미니맵 중앙으로 이동
-                     try {
-                       const currentZoom = mapRef.current && typeof mapRef.current.getLevel === 'function' 
-                         ? kakaoToZoom(mapRef.current.getLevel()) 
-                         : globalState.zoom;
-                       const lat = rvPos.getLat();
-                       const lng = rvPos.getLng();
-                       
-                       // 미니맵 중앙으로 이동
-                       if (mapRef.current) {
-                         mapRef.current.setCenter(rvPos);
-                       }
-                       onStateChange({ lat, lng, zoom: currentZoom });
-                     } catch (error) {
-                       console.error('Kakao Roadview sync error:', error);
-                     }
-                     
-                     // 거리뷰 상태 업데이트 (동기화를 위해)
-                     onStreetViewChange({ lat: rvPos.getLat(), lng: rvPos.getLng(), active: true });
-                     
-                     // Sync Walker - 미니맵 중앙에 위치
-                     if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
-                       kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
-                       kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
-                     }
+                  const positionListener = () => {
+                    const rvPos = rv.getPosition();
+                    const viewpoint = rv.getViewpoint();
+                    isDragging.current = true; 
+                    
+                    // Sync Map Center - 미니맵 중앙으로 이동
+                    try {
+                      const currentZoom = mapRef.current && typeof mapRef.current.getLevel === 'function' 
+                        ? kakaoToZoom(mapRef.current.getLevel()) 
+                        : globalState.zoom;
+                      const lat = rvPos.getLat();
+                      const lng = rvPos.getLng();
+                      
+                      // 미니맵 중앙으로 이동
+                      if (mapRef.current) {
+                        mapRef.current.setCenter(rvPos);
+                      }
+                      onStateChange({ lat, lng, zoom: currentZoom });
+                    } catch (error) {
+                      console.error('Kakao Roadview sync error:', error);
+                    }
+                    
+                    // 거리뷰 상태 업데이트 (동기화를 위해)
+                    onStreetViewChange({ lat: rvPos.getLat(), lng: rvPos.getLng(), active: true });
+                    
+                    // Sync Walker - 미니맵 중앙에 위치
+                    if (kakaoGisRef.current.walkerOverlay && mapRef.current) {
+                      // walker 위치 업데이트
+                      kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
+                      kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                      // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트 (동기화 보장)
+                      if (viewpoint) {
+                        createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
+                      }
+                    }
 
-                     setTimeout(() => isDragging.current = false, 200);
-                   };
+                    setTimeout(() => isDragging.current = false, 200);
+                  };
                    
-                   const viewpointListener = () => {
-                     const viewpoint = rv.getViewpoint();
-                     const rvPos = rv.getPosition();
-                     if (kakaoGisRef.current.walkerOverlay) {
-                       const content = kakaoGisRef.current.walkerOverlay.getContent();
-                       if (content) {
-                         content.style.transformOrigin = 'center center'; // 회전 중심을 중앙으로 설정 (방향 비추기)
-                         content.style.transform = `rotate(${viewpoint.pan}deg)`;
-                       }
-                     }
-                     // 방향 표시 폴리곤 업데이트
-                     if (rvPos && mapRef.current && viewpoint) {
-                       createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
-                     }
-                   };
+                  const viewpointListener = () => {
+                    const viewpoint = rv.getViewpoint();
+                    const rvPos = rv.getPosition();
+                    if (kakaoGisRef.current.walkerOverlay) {
+                      const content = kakaoGisRef.current.walkerOverlay.getContent();
+                      if (content) {
+                        content.style.transformOrigin = 'center center'; // 회전 중심을 중앙으로 설정 (방향 비추기)
+                        content.style.transform = `rotate(${viewpoint.pan}deg)`;
+                      }
+                      // Walker 위치도 거리뷰 위치와 동기화
+                      if (rvPos && mapRef.current) {
+                        kakaoGisRef.current.walkerOverlay.setPosition(rvPos);
+                        kakaoGisRef.current.walkerOverlay.setMap(mapRef.current);
+                        // walker 위치 업데이트 직후 폴리곤도 같은 위치로 업데이트 (동기화 보장)
+                        createKakaoDirectionPolygon(rvPos, viewpoint.pan, mapRef.current);
+                      }
+                    }
+                  };
                    
                    window.kakao.maps.event.addListener(rv, 'position_changed', positionListener);
                    window.kakao.maps.event.addListener(rv, 'viewpoint_changed', viewpointListener);
