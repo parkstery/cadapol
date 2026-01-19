@@ -7,6 +7,8 @@ export interface MapProviderConfig {
   initialState: MapState;
   isSatellite: boolean;
   onStateChange: (state: MapState) => void;
+  // 🆕 거리뷰 관련 옵션
+  panoContainer?: HTMLDivElement; // Google Street View용 컨테이너
 }
 
 export interface MapCapabilities {

@@ -29,10 +29,51 @@ export class GoogleMapProvider implements MapProvider {
       throw new Error('Container element is required');
     }
     
-    // 거리뷰용 컨테이너 생성 (기존 구조와 호환)
-    this.panoContainer = document.createElement('div');
-    this.panoContainer.style.display = 'none';
-    config.container.appendChild(this.panoContainer);
+    // 거리뷰용 컨테이너 설정 (기존 구조와 호환)
+    // config에서 제공된 컨테이너를 우선 사용, 없으면 새로 생성
+    if (config.panoContainer) {
+      this.panoContainer = config.panoContainer;
+    } else {
+      this.panoContainer = document.createElement('div');
+      this.panoContainer.style.position = 'absolute';
+      this.panoContainer.style.top = '0';
+      this.panoContainer.style.left = '0';
+      this.panoContainer.style.width = '100%';
+      this.panoContainer.style.height = '100%';
+      this.panoContainer.style.display = 'none';
+      config.container.appendChild(this.panoContainer);
+    }
+    
+    // 컨테이너 스타일 보장 (전체 영역 채우기)
+    // JSX에서 렌더링된 컨테이너를 사용하는 경우 스타일이 이미 설정되어 있을 수 있으므로
+    // 필요한 스타일만 보장
+    if (!config.panoContainer) {
+      // 새로 생성한 컨테이너인 경우에만 스타일 설정
+      this.panoContainer.style.position = 'absolute';
+      this.panoContainer.style.top = '0';
+      this.panoContainer.style.left = '0';
+      this.panoContainer.style.right = '0';
+      this.panoContainer.style.bottom = '0';
+      this.panoContainer.style.width = '100%';
+      this.panoContainer.style.height = '100%';
+      this.panoContainer.style.margin = '0';
+      this.panoContainer.style.padding = '0';
+      this.panoContainer.style.boxSizing = 'border-box';
+      this.panoContainer.style.display = 'none';
+    } else {
+      // 기존 컨테이너를 사용하는 경우 필요한 스타일만 보장
+      this.panoContainer.style.position = 'absolute';
+      this.panoContainer.style.top = '0';
+      this.panoContainer.style.left = '0';
+      this.panoContainer.style.right = '0';
+      this.panoContainer.style.bottom = '0';
+      this.panoContainer.style.width = '100%';
+      this.panoContainer.style.height = '100%';
+      this.panoContainer.style.margin = '0';
+      this.panoContainer.style.padding = '0';
+      this.panoContainer.style.boxSizing = 'border-box';
+      // display는 JSX에서 제어하므로 여기서는 설정하지 않음
+    }
     
     // StreetView Panorama 초기화
     this.panorama = new google.maps.StreetViewPanorama(this.panoContainer, {

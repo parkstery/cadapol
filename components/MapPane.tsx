@@ -8,6 +8,9 @@ import { MapProvider } from './map-providers/BaseMapProvider';
 import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
+// 🆕 GIS 도구
+import { DistanceMeasure } from './gis-tools/DistanceMeasure';
+import { AreaMeasure } from './gis-tools/AreaMeasure';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -129,6 +132,8 @@ const MapPane: React.FC<MapPaneProps> = ({
               initialState: globalState,
               isSatellite: config.isSatellite,
               onStateChange: onStateChange,
+              // 🆕 거리뷰 컨테이너 전달
+              panoContainer: googlePanoRef.current || undefined,
             }).then(() => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
@@ -145,6 +150,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                     const isVisible = panorama.getVisible();
                     setIsStreetViewActive(isVisible);
                     if (isVisible) {
+                      // 거리뷰 컨테이너 표시 보장
+                      if (googlePanoRef.current) {
+                        googlePanoRef.current.style.display = 'block';
+                      }
                       const coverageLayer = provider.getCoverageLayer();
                       if (coverageLayer && mapRef.current) {
                         coverageLayer.setMap(mapRef.current);
@@ -160,6 +169,10 @@ const MapPane: React.FC<MapPaneProps> = ({
                         onStreetViewChange({ lat, lng, active: true });
                       }
                     } else {
+                      // 거리뷰 컨테이너 숨김
+                      if (googlePanoRef.current) {
+                        googlePanoRef.current.style.display = 'none';
+                      }
                       const coverageLayer = provider.getCoverageLayer();
                       if (coverageLayer) {
                         coverageLayer.setMap(null);
