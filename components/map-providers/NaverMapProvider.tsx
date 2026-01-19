@@ -285,10 +285,17 @@ export class NaverMapProvider implements MapProvider {
   }
   
   cleanup(): void {
-    // 리스너 제거
-    this.listeners.forEach(({ event, handler }) => {
-      if (this.map) {
-        window.naver.maps.Event.removeListener(this.map, event, handler);
+    // 리스너 제거 (안전하게 처리)
+    // 네이버맵 API: addListener가 반환한 리스너 객체를 removeListener에 직접 전달
+    this.listeners.forEach(({ handler }) => {
+      try {
+        if (handler) {
+          // 리스너 객체를 직접 전달 (가장 안전한 방법)
+          window.naver.maps.Event.removeListener(handler);
+        }
+      } catch (error) {
+        // 이미 제거된 리스너이거나 유효하지 않은 리스너인 경우 무시
+        // 에러를 출력하지 않고 조용히 무시 (정상적인 상황일 수 있음)
       }
     });
     this.listeners = [];
