@@ -501,21 +501,17 @@ const MapPane: React.FC<MapPaneProps> = ({
       kakaoGisRef.current.walkerOverlay = null;
     }
     
-    // 카카오맵 공식 walker 이미지 사용
-    const img = new Image();
-    img.onload = () => {
-      const content = document.createElement('div');
-      content.style.width = '26px';
-      content.style.height = '46px';
-      content.style.background = 'url(https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/walker.png) no-repeat 0 0';
-      content.style.backgroundSize = '26px 46px';
-      content.style.backgroundPosition = 'center';
-      content.style.backgroundRepeat = 'no-repeat';
-      content.style.transformOrigin = 'center center'; // 회전 중심을 중앙으로 설정 (방향 비추기)
-      if (angle !== undefined) {
-        content.style.transform = `rotate(${angle}deg)`;
+    // walker 생성 플래그 (중복 방지)
+    let walkerCreated = false;
+    
+    // walker 생성 헬퍼 함수 (중복 방지)
+    const createWalkerOverlay = (content: HTMLDivElement) => {
+      // 이미 생성되었으면 무시
+      if (walkerCreated || kakaoGisRef.current.walkerOverlay) {
+        return;
       }
       
+      walkerCreated = true;
       kakaoGisRef.current.walkerOverlay = new window.kakao.maps.CustomOverlay({
         position: pos,
         content: content,
@@ -537,7 +533,6 @@ const MapPane: React.FC<MapPaneProps> = ({
             // walker의 실제 position을 가져와서 폴리곤과 동기화
             const walkerPos = kakaoGisRef.current.walkerOverlay.getPosition();
             if (walkerPos) {
-              // walker 재표시 (setMap을 다시 호출하지 않고 위치만 확인)
               // 폴리곤만 재생성하여 동기화 보장
               if (angle !== undefined) {
                 createKakaoDirectionPolygon(walkerPos, angle, map);
@@ -555,45 +550,30 @@ const MapPane: React.FC<MapPaneProps> = ({
       }, 150);
     };
     
-    img.onerror = () => {
-      console.error('Walker 이미지 로딩 실패');
-      // 이미지 로딩 실패 시 삼각형 마커 생성 (네이버맵과 동일한 형태)
-      const size = 24;
-      const svg = `
-        <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12,2 L22,20 L2,20 Z" fill="#FF3333" stroke="#FFFFFF" stroke-width="2"/>
-        </svg>
-      `;
-      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
-      
-      const content = document.createElement('div');
-      content.style.width = `${size}px`;
-      content.style.height = `${size}px`;
-      content.style.backgroundImage = `url(${url})`;
-      content.style.backgroundSize = 'contain';
-      content.style.backgroundPosition = 'center';
-      content.style.backgroundRepeat = 'no-repeat';
-      content.style.transformOrigin = 'center center'; // 회전 중심을 중앙으로 설정 (방향 비추기)
-      if (angle !== undefined) {
-        content.style.transform = `rotate(${angle}deg)`;
-      }
-      
-      kakaoGisRef.current.walkerOverlay = new window.kakao.maps.CustomOverlay({
-        position: pos,
-        content: content,
-        map: map,
-        yAnchor: 0.5, // 중심 기준으로 앵커 설정 (PanoID point에 일치)
-        zIndex: 1000
-      });
-      
-      // 방향 표시 폴리곤 생성
-      if (angle !== undefined && map) {
-        createKakaoDirectionPolygon(pos, angle, map);
-      }
-    };
+    // SVG로 walker 직접 생성 (이미지 로딩 실패 방지)
+    const size = 24;
+    const svg = `
+      <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12,2 L22,20 L2,20 Z" fill="#FF3333" stroke="#FFFFFF" stroke-width="2"/>
+      </svg>
+    `;
+    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
     
-    img.src = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/walker.png';
+    const content = document.createElement('div');
+    content.style.width = `${size}px`;
+    content.style.height = `${size}px`;
+    content.style.backgroundImage = `url(${url})`;
+    content.style.backgroundSize = 'contain';
+    content.style.backgroundPosition = 'center';
+    content.style.backgroundRepeat = 'no-repeat';
+    content.style.transformOrigin = 'center center'; // 회전 중심을 중앙으로 설정 (방향 비추기)
+    if (angle !== undefined) {
+      content.style.transform = `rotate(${angle}deg)`;
+    }
+    
+    // walker 생성
+    createWalkerOverlay(content);
   }, [createKakaoDirectionPolygon]);
 
   // 네이버맵 방향 표시 폴리곤 생성 (부채 모양)
