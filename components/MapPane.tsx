@@ -647,10 +647,10 @@ const MapPane: React.FC<MapPaneProps> = ({
       map: map,
       paths: path,
       strokeWeight: 0,
-      strokeColor: '#4A90E2',
+      strokeColor: '#e24a4a',
       strokeOpacity: 0,
-      fillColor: '#4A90E2',
-      fillOpacity: 0.3, // 반투명 파란색
+      fillColor: '#e24a4a',
+      fillOpacity: 0.3, // 반투명 빨간색 (카카오맵과 동일)
       zIndex: 999 // marker 아래에 표시
     });
     
@@ -2943,7 +2943,7 @@ const MapPane: React.FC<MapPaneProps> = ({
         ref={containerRef} 
         className={`transition-all duration-300 ease-in-out bg-white
           ${isStreetViewActive 
-            ? 'absolute w-[240px] h-[240px] z-[100] border-4 border-white shadow-2xl rounded-lg overflow-hidden' 
+            ? 'absolute w-[240px] h-[240px] z-[9999] border-4 border-white shadow-2xl rounded-lg overflow-hidden' 
             : 'w-full h-full z-0'
           }`}
         style={isStreetViewActive ? {
@@ -2973,7 +2973,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       <div 
         ref={naverPanoContainerRef}
         className={`absolute bg-black transition-opacity duration-300 
-           ${config.type === 'naver' && isStreetViewActive ? 'z-10 opacity-100 pointer-events-auto' : 'z-[-1] opacity-0 pointer-events-none'}`}
+           ${config.type === 'naver' && isStreetViewActive ? 'z-[1] opacity-100 pointer-events-auto' : 'z-[-1] opacity-0 pointer-events-none'}`}
         style={{
           position: 'absolute',
           top: config.type === 'naver' && isStreetViewActive ? '0' : 'auto',
@@ -2992,7 +2992,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       {isStreetViewActive && (
         <button 
           onClick={closeStreetView}
-          className="absolute z-[110] bg-white text-gray-800 p-1.5 flex items-center justify-center shadow-lg rounded hover:bg-gray-100 transition-colors border border-gray-300 top-4 right-4"
+          className="absolute z-[9999] bg-white text-gray-800 p-1.5 flex items-center justify-center shadow-lg rounded hover:bg-gray-100 transition-colors border border-gray-300 top-4 right-4"
           title="거리뷰 닫기"
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
@@ -3011,7 +3011,7 @@ const MapPane: React.FC<MapPaneProps> = ({
        {/* 전체화면 버튼 - 모든 맵에서 우상단, 거리뷰 활성화 시 오른쪽으로 이동 */}
        <button 
          onClick={onToggleFullscreen}
-         className={`absolute z-[110] bg-white p-1.5 rounded shadow border border-gray-300 hover:bg-gray-50 transition-colors top-4 ${
+         className={`absolute z-[9999] bg-white p-1.5 rounded shadow border border-gray-300 hover:bg-gray-50 transition-colors top-4 ${
            isStreetViewActive 
              ? config.type === 'naver'
                ? 'right-[50px]'  // 네이버: 거리뷰 버튼(16px) + 간격(2px) + 버튼(32px) = 50px
@@ -3035,7 +3035,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       {config.type === 'naver' && (
         <button 
           onClick={isStreetViewActive ? closeStreetView : toggleNaverStreetLayer} 
-          className={`absolute top-4 ${isStreetViewActive ? 'right-4' : 'right-[50px]'} z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isStreetViewActive || isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          className={`absolute top-4 ${isStreetViewActive ? 'right-4' : 'right-[50px]'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isStreetViewActive || isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
           title={isStreetViewActive ? '거리뷰 닫기' : (isNaverLayerOn ? '거리뷰 끄기' : '거리뷰 켜기')}
         >
           <img src="/streetview-icon.png" alt="거리뷰" className="w-5 h-5 object-contain" />
