@@ -242,13 +242,41 @@ const MapPane: React.FC<MapPaneProps> = ({
           // window.kakao.maps.load가 준비되었는지 확인
           if (window.kakao.maps && typeof window.kakao.maps.load === 'function') {
             if (containerRef.current) {
-              containerRef.current.innerHTML = '';
-              
-              // 기존 Provider 정리
+              // 기존 Provider 정리 (컨테이너 비우기 전에)
               if (mapProviderRef.current) {
-                mapProviderRef.current.cleanup();
+                try {
+                  mapProviderRef.current.cleanup();
+                } catch (error) {
+                  console.warn('KakaoMapProvider cleanup error:', error);
+                }
                 mapProviderRef.current = null;
               }
+              
+              // 카카오맵 리소스 추가 정리
+              clearKakaoDrawingResources();
+              if (kakaoGisRef.current.walkerOverlay) {
+                try {
+                  kakaoGisRef.current.walkerOverlay.setMap(null);
+                } catch (e) {}
+                kakaoGisRef.current.walkerOverlay = null;
+              }
+              if (kakaoGisRef.current.directionPolygon) {
+                try {
+                  kakaoGisRef.current.directionPolygon.setMap(null);
+                } catch (e) {}
+                kakaoGisRef.current.directionPolygon = null;
+              }
+              if (kakaoGisRef.current.rv) {
+                try {
+                  kakaoGisRef.current.rv = null;
+                } catch (e) {}
+              }
+              kakaoGisRef.current.geocoder = null;
+              kakaoGisRef.current.rvClient = null;
+              kakaoGisRef.current.roadviewLayer = false;
+              
+              // 컨테이너 비우기
+              containerRef.current.innerHTML = '';
               
               // 새 Provider 생성 및 초기화
               window.kakao.maps.load(async () => {

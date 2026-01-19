@@ -349,23 +349,40 @@ export class KakaoMapProvider implements MapProvider {
     
     // 레이어 제거
     this.layers.forEach(layer => {
-      layer.detachFromMap();
-      layer.cleanup();
+      try {
+        layer.detachFromMap();
+        layer.cleanup();
+      } catch (error) {
+        // 레이어 정리 중 오류 무시
+      }
     });
     this.layers.clear();
     
     // 마커 제거
-    this.markers.forEach(marker => marker.setMap(null));
+    this.markers.forEach(marker => {
+      try {
+        if (marker && marker.setMap) {
+          marker.setMap(null);
+        }
+      } catch (error) {
+        // 마커 제거 중 오류 무시
+      }
+    });
     this.markers.clear();
     
     // Geocoder 및 RoadviewClient 정리
     this.geocoder = null;
     this.roadviewClient = null;
     
-    // Map 정리
+    // Map 정리 (마지막에)
     if (this.map) {
-      // Kakao Maps는 명시적인 destroy 메서드가 없음
-      this.map = null;
+      try {
+        // 카카오맵은 명시적인 destroy 메서드가 없으므로 null로 설정
+        // 컨테이너가 비워지면 자동으로 정리됨
+        this.map = null;
+      } catch (error) {
+        // 맵 정리 중 오류 무시
+      }
     }
     
     this.config = null;
