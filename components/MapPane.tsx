@@ -52,6 +52,11 @@ const MapPane: React.FC<MapPaneProps> = ({
   // 🆕 레이어 관리자
   const layerManagerRef = useRef<LayerManager | null>(null);
   
+  // 🆕 길찾기 관리자
+  const routingManagerRef = useRef<RoutingManager | null>(null);
+  const [isRoutingPanelOpen, setIsRoutingPanelOpen] = useState(false);
+  const [currentRoute, setCurrentRoute] = useState<{ distance: number; duration: number } | null>(null);
+  
   // -- Sync Control Refs --
   const isDragging = useRef(false); 
   const isProgrammaticUpdate = useRef(false);
