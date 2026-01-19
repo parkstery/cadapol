@@ -973,6 +973,19 @@ const MapPane: React.FC<MapPaneProps> = ({
         if (mapRef.current) {
           createNaverDirectionPolygon(pos, angle, mapRef.current);
         }
+        
+        // setCenter 후 marker를 미니맵 중앙에 유지 (비동기 처리 보완)
+        requestAnimationFrame(() => {
+          if (mapRef.current && naverMarkerRef.current) {
+            const currentCenter = mapRef.current.getCenter();
+            if (currentCenter) {
+              // marker 위치를 지도 중심으로 다시 설정
+              naverMarkerRef.current.setPosition(currentCenter);
+              // 지도 중심도 다시 설정 (이중 보장)
+              mapRef.current.setCenter(pos);
+            }
+          }
+        });
       };
       
       window.naver.maps.Event.addListener(pano, 'position_changed', positionChangedListener);
@@ -1014,6 +1027,17 @@ const MapPane: React.FC<MapPaneProps> = ({
         if (pos && mapRef.current) {
           createNaverDirectionPolygon(pos, angle, mapRef.current);
         }
+        
+        // setCenter 후 marker를 미니맵 중앙에 유지 (비동기 처리 보완)
+        requestAnimationFrame(() => {
+          if (mapRef.current && naverMarkerRef.current && pos) {
+            const currentCenter = mapRef.current.getCenter();
+            if (currentCenter) {
+              // marker 위치를 지도 중심으로 다시 설정
+              naverMarkerRef.current.setPosition(currentCenter);
+            }
+          }
+        });
       });
     } catch (error) {
       console.error('Naver Panorama 생성 오류:', error);
@@ -1682,6 +1706,19 @@ const MapPane: React.FC<MapPaneProps> = ({
                     
                     // 방향 표시 폴리곤 생성/업데이트
                     createNaverDirectionPolygon(latlng, angle, mapRef.current);
+                    
+                    // setCenter 후 marker를 미니맵 중앙에 유지 (비동기 처리 보완)
+                    requestAnimationFrame(() => {
+                      if (mapRef.current && naverMarkerRef.current) {
+                        const currentCenter = mapRef.current.getCenter();
+                        if (currentCenter) {
+                          // marker 위치를 지도 중심으로 다시 설정
+                          naverMarkerRef.current.setPosition(currentCenter);
+                          // 지도 중심도 다시 설정 (이중 보장)
+                          mapRef.current.setCenter(latlng);
+                        }
+                      }
+                    });
                   }
                   
                   window.naver.maps.Event.trigger(naverPanoramaRef.current, 'resize');
@@ -1729,6 +1766,19 @@ const MapPane: React.FC<MapPaneProps> = ({
               
               // 방향 표시 폴리곤 생성/업데이트
               createNaverDirectionPolygon(latlng, angle, mapRef.current);
+              
+              // setCenter 후 marker를 미니맵 중앙에 유지 (비동기 처리 보완)
+              requestAnimationFrame(() => {
+                if (mapRef.current && naverMarkerRef.current) {
+                  const currentCenter = mapRef.current.getCenter();
+                  if (currentCenter) {
+                    // marker 위치를 지도 중심으로 다시 설정
+                    naverMarkerRef.current.setPosition(currentCenter);
+                    // 지도 중심도 다시 설정 (이중 보장)
+                    mapRef.current.setCenter(latlng);
+                  }
+                }
+              });
             }
             
             setTimeout(() => {
@@ -1800,6 +1850,19 @@ const MapPane: React.FC<MapPaneProps> = ({
         if (mapRef.current) {
           createNaverDirectionPolygon(latlng, angle, mapRef.current);
         }
+        
+        // setCenter 후 marker를 미니맵 중앙에 유지 (비동기 처리 보완)
+        requestAnimationFrame(() => {
+          if (mapRef.current && naverMarkerRef.current) {
+            const currentCenter = mapRef.current.getCenter();
+            if (currentCenter) {
+              // marker 위치를 지도 중심으로 다시 설정
+              naverMarkerRef.current.setPosition(currentCenter);
+              // 지도 중심도 다시 설정 (이중 보장)
+              mapRef.current.setCenter(latlng);
+            }
+          }
+        });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
