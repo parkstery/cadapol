@@ -2,6 +2,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapVendor, MapState, PaneConfig, GISMode } from '../types';
 import KakaoGisToolbar from './KakaoGisToolbar';
 import proj4 from 'proj4';
+// 🆕 새 Provider 시스템 (점진적 마이그레이션)
+import { MapProviderFactory } from './map-providers/MapProviderFactory';
+import { MapProvider } from './map-providers/BaseMapProvider';
+import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
+import { NaverMapProvider } from './map-providers/NaverMapProvider';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -27,6 +32,10 @@ const MapPane: React.FC<MapPaneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  
+  // 🆕 새 Provider 시스템 (점진적 마이그레이션)
+  const mapProviderRef = useRef<MapProvider | null>(null);
+  const useNewProvider = config.type === 'google' || config.type === 'kakao' || config.type === 'naver'; // 모든 맵 새 Provider 사용 (점진적 마이그레이션)
   
   // -- Sync Control Refs --
   const isDragging = useRef(false); 
@@ -100,24 +109,89 @@ const MapPane: React.FC<MapPaneProps> = ({
   useEffect(() => {
     let intervalId: any = null;
     const checkAndInit = () => {
-      // 1. Google
+      // 1. Google - 🆕 새 Provider 시스템 사용
       if (config.type === 'google' && window.google && window.google.maps) {
-        if (containerRef.current) containerRef.current.innerHTML = '';
-        initGoogleMap();
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+          
+          // 기존 Provider 정리
+          if (mapProviderRef.current) {
+            mapProviderRef.current.cleanup();
+            mapProviderRef.current = null;
+          }
+          
+          // 새 Provider 생성 및 초기화
+          try {
+            const provider = MapProviderFactory.create('google');
+            provider.init({
+              container: containerRef.current,
+              initialState: globalState,
+              isSatellite: config.isSatellite,
+              onStateChange: onStateChange,
+            }).then(() => {
+              mapProviderRef.current = provider;
+              mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
+              setSdkLoaded(true);
+            }).catch((error) => {
+              console.error('GoogleMapProvider initialization failed:', error);
+              // 실패 시 기존 방식으로 폴백
+              initGoogleMap();
+              setSdkLoaded(true);
+            });
+          } catch (error) {
+            console.error('GoogleMapProvider creation failed:', error);
+            // 실패 시 기존 방식으로 폴백
+            initGoogleMap();
+            setSdkLoaded(true);
+          }
+        }
         return true;
       }
-      // 2. Kakao - autoload=false이므로 window.kakao와 maps.load() 체크
+      // 2. Kakao - 🆕 새 Provider 시스템 사용
       if (config.type === 'kakao' && window.kakao) {
         try {
           // window.kakao.maps.load가 준비되었는지 확인
           if (window.kakao.maps && typeof window.kakao.maps.load === 'function') {
-            window.kakao.maps.load(() => {
-              if (containerRef.current) {
-                containerRef.current.innerHTML = '';
-                initKakaoMap();
-                setSdkLoaded(true);
+            if (containerRef.current) {
+              containerRef.current.innerHTML = '';
+              
+              // 기존 Provider 정리
+              if (mapProviderRef.current) {
+                mapProviderRef.current.cleanup();
+                mapProviderRef.current = null;
               }
-            });
+              
+              // 새 Provider 생성 및 초기화
+              window.kakao.maps.load(async () => {
+                try {
+                  const provider = MapProviderFactory.create('kakao');
+                  await provider.init({
+                    container: containerRef.current!,
+                    initialState: globalState,
+                    isSatellite: config.isSatellite,
+                    onStateChange: onStateChange,
+                  });
+                  
+                  mapProviderRef.current = provider;
+                  mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
+                  
+                  // 기존 GIS 기능 초기화 (지적 정보 조회 등)
+                  // 새 Provider의 Geocoder를 기존 ref에 설정 (호환성)
+                  if (provider instanceof KakaoMapProvider) {
+                    kakaoGisRef.current.geocoder = provider.getGeocoder();
+                    kakaoGisRef.current.rvClient = provider.getRoadviewClient();
+                  }
+                  setupKakaoAddressClick();
+                  
+                  setSdkLoaded(true);
+                } catch (error) {
+                  console.error('KakaoMapProvider initialization failed:', error);
+                  // 실패 시 기존 방식으로 폴백
+                  initKakaoMap();
+                  setSdkLoaded(true);
+                }
+              });
+            }
             return true;
           }
           // maps.load가 아직 준비되지 않았으면 false 반환하여 재시도
@@ -166,6 +240,12 @@ const MapPane: React.FC<MapPaneProps> = ({
     setIsNaverLayerOn(false); 
     setGisMode(GISMode.DEFAULT);
     setIsStreetViewActive(false);
+    
+    // 🆕 새 Provider 정리
+    if (mapProviderRef.current) {
+      mapProviderRef.current.cleanup();
+      mapProviderRef.current = null;
+    }
     
     // Clear Naver Resources
     if (config.type !== 'naver') {
@@ -1535,6 +1615,14 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // 4. Update Effects
   useEffect(() => {
+    // 🆕 새 Provider 시스템 사용 시
+    if (useNewProvider && mapProviderRef.current) {
+      if (isDragging.current) return;
+      mapProviderRef.current.syncState(globalState);
+      return;
+    }
+    
+    // 기존 방식 (Kakao, Naver, 또는 Provider 실패 시)
     if (!mapRef.current) return;
     if (isDragging.current) return;
     isProgrammaticUpdate.current = true;
@@ -1557,6 +1645,13 @@ const MapPane: React.FC<MapPaneProps> = ({
   }, [globalState.lat, globalState.lng, globalState.zoom, config.type, sdkLoaded]);
 
   useEffect(() => {
+    // 🆕 새 Provider 시스템 사용 시
+    if (useNewProvider && mapProviderRef.current) {
+      mapProviderRef.current.setSatelliteMode(config.isSatellite);
+      return;
+    }
+    
+    // 기존 방식
     if (!mapRef.current) return;
     try {
       if (config.type === 'google') {
@@ -1570,6 +1665,13 @@ const MapPane: React.FC<MapPaneProps> = ({
   }, [config.isSatellite, config.type, sdkLoaded]);
 
   useEffect(() => {
+    // 🆕 새 Provider 시스템 사용 시
+    if (useNewProvider && mapProviderRef.current) {
+      mapProviderRef.current.setMarker(searchPos);
+      return;
+    }
+    
+    // 기존 방식
     if (!mapRef.current) return;
     if (markerRef.current) {
         try { markerRef.current.setMap(null); } catch(e){}
@@ -1585,7 +1687,7 @@ const MapPane: React.FC<MapPaneProps> = ({
           }
       } catch(e) {}
     }
-  }, [searchPos, config.type, sdkLoaded]);
+  }, [searchPos, config.type, sdkLoaded, useNewProvider]);
 
   // -- Street View Synchronization Effect --
   useEffect(() => {
