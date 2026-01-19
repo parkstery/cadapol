@@ -2511,7 +2511,7 @@ const MapPane: React.FC<MapPaneProps> = ({
              : config.type === 'google'
                ? 'right-16'  // 구글맵 pegman 옆에 배치
                : config.type === 'naver'
-                 ? 'right-[50px]'  // 네이버맵: 거리뷰 버튼(16px) + 간격(2px) + 버튼(32px) = 50px
+                 ? 'right-4'  // 네이버맵: 오른쪽 상단 (거리뷰 버튼과 위치 교체)
                  : 'right-4'   // 카카오맵
          }`}
          title="전체화면"
@@ -2527,7 +2527,7 @@ const MapPane: React.FC<MapPaneProps> = ({
       {config.type === 'naver' && !isStreetViewActive && (
         <button 
           onClick={toggleNaverStreetLayer} 
-          className={`absolute top-4 right-4 z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          className={`absolute top-4 right-[50px] z-[110] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${isNaverLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
           title={isNaverLayerOn ? '거리뷰 끄기' : '거리뷰 켜기'}
         >
           <img src="/streetview-icon.png" alt="거리뷰" className="w-5 h-5 object-contain" />
