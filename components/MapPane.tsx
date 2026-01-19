@@ -1374,16 +1374,12 @@ const MapPane: React.FC<MapPaneProps> = ({
         return;
       }
 
-      if (data.response && data.response.status === 'OK' && data.response.result && data.response.result.featureCollection && data.response.result.featureCollection.features && data.response.result.featureCollection.features.length > 0) {
+      // Reference 코드와 동일한 형식으로 수정
+      if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         if (feature.geometry) {
-          console.log("Step2: Geometry retrieved", feature.geometry.type);
           drawParcelPolygon(feature.geometry, currentMap);
-        } else {
-          console.warn("Step2: No geometry in feature");
         }
-      } else {
-        console.warn("Step2: No features found or API error", data.response);
       }
     };
 
