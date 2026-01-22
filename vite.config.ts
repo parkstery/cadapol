@@ -23,6 +23,25 @@ export default defineConfig(({ mode }) => {
           // 파일 감시 안정성 향상
           usePolling: false, // Windows에서 필요시 true로 변경
         },
+        // ✅ VWorld API 프록시 (로컬 개발용)
+        proxy: {
+          '/api/vworld-boundaries': {
+            target: 'https://api.vworld.kr',
+            changeOrigin: true,
+            rewrite: (path) => {
+              // 실제로는 Vercel 서버리스 함수를 사용하므로 로컬에서는 직접 프록시
+              // 배포 환경에서는 Vercel이 자동으로 서버리스 함수를 처리
+              return path;
+            },
+            configure: (proxy, _options) => {
+              proxy.on('proxyReq', (proxyReq, req, _res) => {
+                // 로컬 개발 시에는 직접 VWorld API로 프록시하지 않고
+                // JSONP 폴백을 사용하도록 함
+                console.log('Local dev: Using JSONP fallback instead of proxy');
+              });
+            },
+          },
+        },
       },
       plugins: [react()],
       define: {
