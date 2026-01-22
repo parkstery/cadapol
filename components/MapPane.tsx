@@ -3473,8 +3473,8 @@ const MapPane: React.FC<MapPaneProps> = ({
           }`}
         style={isStreetViewActive ? {
           position: 'absolute',
-          bottom: '12px',
-          left: '12px',
+          bottom: '0',
+          left: '0',
           top: 'auto',
           right: 'auto',
           // 모바일에서 60% 크기, 데스크톱에서 기본 크기
