@@ -527,8 +527,19 @@ const MapPane: React.FC<MapPaneProps> = ({
             }, 100);
           }
         } else if (config.type === 'naver') {
-          window.naver.maps.Event.trigger(mapRef.current, 'resize');
-          mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
+          // ✅ 새 Provider 시스템 사용 시 mapProviderRef를 통해 상태 동기화
+          if (useNewProvider && mapProviderRef.current) {
+            // NaverMapProvider는 resize가 필요 없음 (자동 처리)
+            mapProviderRef.current.syncState(globalState);
+          } else if (mapRef.current && window.naver && window.naver.maps) {
+            // 기존 방식 (레거시)
+            try {
+              window.naver.maps.Event.trigger(mapRef.current, 'resize');
+              mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
+            } catch (e) {
+              console.error('Naver map resize/setCenter error:', e);
+            }
+          }
           
           // 네이버 파노라마 리사이즈 처리
           if (isStreetViewActive && naverPanoramaRef.current) {
@@ -1255,54 +1266,65 @@ const MapPane: React.FC<MapPaneProps> = ({
       mapRef.current.addListener('zoom_changed', handleUpdate);
 
     } else if (type === 'kakao') {
-      window.kakao.maps.event.addListener(mapRef.current, 'dragstart', () => { isDragging.current = true; });
-      window.kakao.maps.event.addListener(mapRef.current, 'dragend', () => { isDragging.current = false; });
-      const handleUpdate = () => {
-        if (!mapRef.current || typeof mapRef.current.getCenter !== 'function' || typeof mapRef.current.getLevel !== 'function') {
-          return;
-        }
-        try {
-          const c = mapRef.current.getCenter();
-          const level = mapRef.current.getLevel();
-          const z = kakaoToZoom(level);
-          if (shouldUpdate(c.getLat(), c.getLng(), z)) {
-              onStateChange({ lat: c.getLat(), lng: c.getLng(), zoom: z });
+      // ✅ 카카오 맵일 때만 카카오 맵 리스너 추가
+      if (mapRef.current && window.kakao && window.kakao.maps) {
+        window.kakao.maps.event.addListener(mapRef.current, 'dragstart', () => { isDragging.current = true; });
+        window.kakao.maps.event.addListener(mapRef.current, 'dragend', () => { isDragging.current = false; });
+        const handleUpdate = () => {
+          if (!mapRef.current || typeof mapRef.current.getCenter !== 'function' || typeof mapRef.current.getLevel !== 'function') {
+            return;
           }
-        } catch (error) {
-          console.error('Kakao Map update error:', error);
-        }
-      };
-      window.kakao.maps.event.addListener(mapRef.current, 'center_changed', handleUpdate);
-      window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', () => {
-        handleUpdate();
-        // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
-        // 로드뷰가 활성화되어 있을 때만 폴리곤 재생성
-        if (isStreetViewActive && kakaoGisRef.current.polygonState && mapRef.current) {
-          const { pos, angle } = kakaoGisRef.current.polygonState;
-          createKakaoDirectionPolygon(pos, angle, mapRef.current);
-        }
-      });
+          try {
+            const c = mapRef.current.getCenter();
+            const level = mapRef.current.getLevel();
+            const z = kakaoToZoom(level);
+            if (shouldUpdate(c.getLat(), c.getLng(), z)) {
+                onStateChange({ lat: c.getLat(), lng: c.getLng(), zoom: z });
+            }
+          } catch (error) {
+            console.error('Kakao Map update error:', error);
+          }
+        };
+        window.kakao.maps.event.addListener(mapRef.current, 'center_changed', handleUpdate);
+        window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', () => {
+          handleUpdate();
+          // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
+          // 로드뷰가 활성화되어 있을 때만 폴리곤 재생성
+          if (isStreetViewActive && kakaoGisRef.current.polygonState && mapRef.current) {
+            const { pos, angle } = kakaoGisRef.current.polygonState;
+            createKakaoDirectionPolygon(pos, angle, mapRef.current);
+          }
+        });
+      }
 
     } else if (type === 'naver') {
-      window.naver.maps.Event.addListener(mapRef.current, 'dragstart', () => { isDragging.current = true; });
-      window.naver.maps.Event.addListener(mapRef.current, 'dragend', () => { isDragging.current = false; });
-      const handleUpdate = () => {
-        if (isProgrammaticUpdate.current) return;
-        const c = mapRef.current.getCenter();
-        const z = mapRef.current.getZoom();
-        if (shouldUpdate(c.lat(), c.lng(), z)) {
-            onStateChange({ lat: c.lat(), lng: c.lng(), zoom: z });
-        }
-      };
-      window.naver.maps.Event.addListener(mapRef.current, 'center_changed', handleUpdate);
-      window.naver.maps.Event.addListener(mapRef.current, 'zoom_changed', () => {
-        handleUpdate();
-        // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
-        if (naverPolygonStateRef.current && mapRef.current) {
-          const { pos, angle } = naverPolygonStateRef.current;
-          createNaverDirectionPolygon(pos, angle, mapRef.current);
-        }
-      });
+      // ✅ 새 Provider 시스템 사용 시 리스너는 Provider 내부에서 처리됨
+      // 기존 방식 (레거시)만 직접 리스너 추가
+      if (!useNewProvider && mapRef.current && window.naver && window.naver.maps) {
+        window.naver.maps.Event.addListener(mapRef.current, 'dragstart', () => { isDragging.current = true; });
+        window.naver.maps.Event.addListener(mapRef.current, 'dragend', () => { isDragging.current = false; });
+        const handleUpdate = () => {
+          if (isProgrammaticUpdate.current) return;
+          try {
+            const c = mapRef.current.getCenter();
+            const z = mapRef.current.getZoom();
+            if (c && shouldUpdate(c.lat(), c.lng(), z)) {
+                onStateChange({ lat: c.lat(), lng: c.lng(), zoom: z });
+            }
+          } catch (error) {
+            console.error('Naver Map update error:', error);
+          }
+        };
+        window.naver.maps.Event.addListener(mapRef.current, 'center_changed', handleUpdate);
+        window.naver.maps.Event.addListener(mapRef.current, 'zoom_changed', () => {
+          handleUpdate();
+          // 지도 줌 변경 시 폴리곤 재생성 (일정한 픽셀 크기 유지)
+          if (naverPolygonStateRef.current && mapRef.current) {
+            const { pos, angle } = naverPolygonStateRef.current;
+            createNaverDirectionPolygon(pos, angle, mapRef.current);
+          }
+        });
+      }
     }
   };
 
@@ -1750,8 +1772,18 @@ const MapPane: React.FC<MapPaneProps> = ({
             }
           }
         } else if (config.type === 'naver') {
-          mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
-          mapRef.current.setZoom(globalState.zoom);
+          // ✅ 새 Provider 시스템 사용 시 mapProviderRef를 통해 상태 동기화
+          if (useNewProvider && mapProviderRef.current) {
+            mapProviderRef.current.syncState(globalState);
+          } else if (mapRef.current && window.naver && window.naver.maps) {
+            // 기존 방식 (레거시)
+            try {
+              mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
+              mapRef.current.setZoom(globalState.zoom);
+            } catch (e) {
+              console.error('Naver map setCenter error:', e);
+            }
+          }
         }
     } catch(e) {
       console.error('Map state update error:', e);
