@@ -477,6 +477,7 @@ export class AdministrativeBoundaryLayer implements Layer {
         });
       } else if (providerName === 'kakao') {
         const kakaoPaths = paths.map(p => new window.kakao.maps.LatLng(p[1], p[0]));
+        console.log(`[Boundary] Creating Kakao polygon with ${kakaoPaths.length} points`);
         polygon = new window.kakao.maps.Polygon({
           path: kakaoPaths,
           strokeWeight: 2,
@@ -488,8 +489,10 @@ export class AdministrativeBoundaryLayer implements Layer {
           map: this.config.visible ? mapInstance : null,
           zIndex: this.config.zIndex
         });
+        console.log(`[Boundary] Kakao polygon created, visible: ${this.config.visible}, map: ${mapInstance ? 'exists' : 'null'}`);
       } else if (providerName === 'naver') {
         const naverPaths = paths.map(p => new window.naver.maps.LatLng(p[1], p[0]));
+        console.log(`[Boundary] Creating Naver polygon with ${naverPaths.length} points`);
         polygon = new window.naver.maps.Polygon({
           paths: naverPaths,
           strokeColor: '#4285F4',
@@ -500,9 +503,16 @@ export class AdministrativeBoundaryLayer implements Layer {
           map: this.config.visible ? mapInstance : null,
           zIndex: this.config.zIndex
         });
+        console.log(`[Boundary] Naver polygon created, visible: ${this.config.visible}, map: ${mapInstance ? 'exists' : 'null'}`);
       } else {
-        console.error(`Unsupported map provider: ${providerName}`);
+        console.error(`[Boundary] Unsupported map provider: ${providerName}`);
         return null;
+      }
+      
+      if (polygon) {
+        console.log(`[Boundary] Polygon created successfully for ${boundary.name}`);
+      } else {
+        console.error(`[Boundary] Failed to create polygon for ${boundary.name}`);
       }
       
       return polygon;
