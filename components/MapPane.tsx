@@ -20,7 +20,7 @@ import { RoutingManager } from './routing/RoutingManager';
 import { RoutingPanel } from './RoutingPanel';
 
 // VWorld API 설정
-const VWORLD_KEY = '80DCE32C-9A0E-359B-BF0A-9FD4E8D4D285';
+const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
 // VWorld API는 도메인 제한이 있으므로 reference 코드와 동일한 도메인 사용
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
 

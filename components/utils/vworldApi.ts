@@ -1,6 +1,6 @@
 // utils/vworldApi.ts
 
-const VWORLD_KEY = '80DCE32C-9A0E-359B-BF0A-9FD4E8D4D285';
+const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
 
 export interface AdministrativeBoundary {
