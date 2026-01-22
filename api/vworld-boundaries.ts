@@ -79,21 +79,21 @@ export default async function handler(
         });
       }
 
-    const data = await response.json();
+      const data = await response.json();
 
-    // 응답 검증
-    if (!data || !data.response) {
-      console.error('Invalid response structure:', JSON.stringify(data).substring(0, 500));
-      return res.status(500).json({ error: 'Invalid API response format' });
-    }
+      // 응답 검증
+      if (!data || !data.response) {
+        console.error('Invalid response structure:', JSON.stringify(data).substring(0, 500));
+        return res.status(500).json({ error: 'Invalid API response format' });
+      }
 
-    if (data.response.status !== 'OK') {
-      console.error('VWorld API error:', data.response);
-      return res.status(500).json({ 
-        error: `API error: ${data.response.status}`,
-        response: data.response
-      });
-    }
+      if (data.response.status !== 'OK') {
+        console.error('VWorld API error:', data.response);
+        return res.status(500).json({ 
+          error: `API error: ${data.response.status}`,
+          response: data.response
+        });
+      }
 
       // 성공 응답
       return res.status(200).json(data);
