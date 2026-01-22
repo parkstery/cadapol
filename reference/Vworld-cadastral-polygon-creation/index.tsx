@@ -7,7 +7,7 @@ import proj4 from 'proj4'; // npm install proj4 @types/proj4
  * [API KEY 설정]
  * 도메인 제한이 걸려 있으므로 키를 직접 코드에 입력합니다.
  */
-const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
+const VWORLD_KEY = '80DCE32C-9A0E-359B-BF0A-9FD4E8D4D285';
 const KAKAO_API_KEY = '8d2d116d6a534a98e73133808f5843a6';
 
 // 허용된 도메인 (VWorld API 호출 시 필요)
