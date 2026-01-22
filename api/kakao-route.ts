@@ -25,9 +25,18 @@ export default async function handler(
     return;
   }
 
-  // REST API 키 확인
+  // REST API 키 확인 및 디버깅
+  console.log('[KakaoRoute] Environment check:', {
+    hasEnvVar: !!process.env.KAKAO_REST_API_KEY,
+    envVarLength: process.env.KAKAO_REST_API_KEY?.length || 0,
+    envVarPrefix: process.env.KAKAO_REST_API_KEY?.substring(0, 8) || 'N/A',
+    usingFallback: !process.env.KAKAO_REST_API_KEY,
+    finalKeyLength: KAKAO_REST_API_KEY.length,
+    finalKeyPrefix: KAKAO_REST_API_KEY.substring(0, 8)
+  });
+  
   if (!KAKAO_REST_API_KEY || KAKAO_REST_API_KEY.trim() === '') {
-    console.error('KAKAO_REST_API_KEY is not set');
+    console.error('[KakaoRoute] KAKAO_REST_API_KEY is not set');
     res.status(500).json({ 
       error: 'Server configuration error',
       message: 'KAKAO_REST_API_KEY environment variable is not set'
@@ -71,14 +80,16 @@ export default async function handler(
     const apiUrl = 'https://apis-navi.kakaomobility.com/v1/directions';
     
     // Authorization 헤더 형식: "KakaoAK {REST_API_KEY}" (공백 포함, 정확한 형식 필수)
-    const authHeader = `KakaoAK ${KAKAO_REST_API_KEY.trim()}`;
+    const trimmedKey = KAKAO_REST_API_KEY.trim();
+    const authHeader = `KakaoAK ${trimmedKey}`;
     
     console.log('[KakaoRoute] Request to Kakao API:', {
       url: apiUrl,
       hasKey: !!KAKAO_REST_API_KEY,
       keyLength: KAKAO_REST_API_KEY.length,
       keyPrefix: KAKAO_REST_API_KEY.substring(0, 8) + '...',
-      authHeaderPrefix: authHeader.substring(0, 15) + '...',
+      keySuffix: '...' + KAKAO_REST_API_KEY.substring(KAKAO_REST_API_KEY.length - 4),
+      authHeaderFormat: authHeader.substring(0, 20) + '...',
       requestBody: JSON.stringify(requestBody).substring(0, 200)
     });
 
@@ -93,11 +104,23 @@ export default async function handler(
 
     if (!response.ok) {
       const errorText = await response.text();
+      const errorJson = (() => {
+        try {
+          return JSON.parse(errorText);
+        } catch {
+          return { raw: errorText };
+        }
+      })();
+      
       console.error('[KakaoRoute] Kakao Directions API error:', {
         status: response.status,
         statusText: response.statusText,
         errorText: errorText.substring(0, 500),
-        authHeaderUsed: authHeader.substring(0, 20) + '...'
+        errorJson: errorJson,
+        authHeaderFormat: authHeader.substring(0, 20) + '...',
+        keyUsed: trimmedKey.substring(0, 8) + '...' + trimmedKey.substring(trimmedKey.length - 4),
+        requestUrl: apiUrl,
+        requestMethod: 'POST'
       });
       
       // 401 오류인 경우 상세한 안내 메시지 제공
@@ -106,13 +129,21 @@ export default async function handler(
           error: 'Unauthorized',
           message: 'Kakao Directions API authentication failed. Please check:',
           checks: [
-            '1. KAKAO_REST_API_KEY environment variable is set correctly',
-            '2. The key is a REST API key (not JavaScript key)',
-            '3. Kakao Mobility → Directions service is enabled in Kakao Developers',
-            '4. Authorization header format is "KakaoAK {KEY}"',
-            '5. Vercel environment variables are set and redeployed'
+            '1. KAKAO_REST_API_KEY environment variable is set correctly in Vercel',
+            '2. The key is a REST API key (not JavaScript key) - should be 32 characters',
+            '3. Kakao Developers → 내 애플리케이션 → 제품 설정 → Kakao Mobility → 길찾기(Directions) 활성화',
+            '4. Authorization header format is "KakaoAK {KEY}" (with space)',
+            '5. Vercel project was redeployed after setting environment variable',
+            '6. Check Vercel Functions logs to see which key is actually being used'
           ],
-          details: errorText.substring(0, 500)
+          debug: {
+            keyLength: trimmedKey.length,
+            keyPrefix: trimmedKey.substring(0, 8),
+            keySuffix: trimmedKey.substring(trimmedKey.length - 4),
+            authHeaderFormat: authHeader.substring(0, 25),
+            usingEnvVar: !!process.env.KAKAO_REST_API_KEY
+          },
+          details: errorJson
         });
         return;
       }
