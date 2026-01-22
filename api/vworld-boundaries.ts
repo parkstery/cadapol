@@ -25,8 +25,10 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // level 변수를 try 블록 밖으로 이동 (에러 로깅에서 사용하기 위해)
+  const { level } = req.query;
+
   try {
-    const { level } = req.query;
 
     // 레벨 검증
     if (!level || (level !== 'sido' && level !== 'sigungu' && level !== 'emd')) {
@@ -123,11 +125,24 @@ export default async function handler(
     } catch (fetchError: any) {
       clearTimeout(timeoutId);
       
+      // 타임아웃 에러 처리
       if (fetchError.name === 'AbortError') {
         console.error('VWorld API request timeout');
         return res.status(504).json({ 
           error: 'Gateway Timeout',
           message: 'VWorld API request timed out after 25 seconds'
+        });
+      }
+      
+      // 네트워크 연결 에러 처리
+      if (fetchError.code === 'UND_ERR_SOCKET' || fetchError.message?.includes('fetch failed')) {
+        console.error('VWorld API connection failed:', fetchError);
+        console.error('Socket details:', fetchError.cause?.socket || 'No socket info');
+        return res.status(503).json({ 
+          error: 'Service Unavailable',
+          message: 'Failed to connect to VWorld API. The service may be temporarily unavailable.',
+          details: fetchError.cause?.message || fetchError.message,
+          code: fetchError.code || 'CONNECTION_ERROR'
         });
       }
       
