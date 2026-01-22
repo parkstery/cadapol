@@ -90,6 +90,13 @@ export class VWorldAPI {
         }
 
         try {
+          // ✅ 응답이 문자열인 경우 (JSONP가 작동하지 않음)
+          if (typeof data === 'string') {
+            console.error('VWorld API: Received string response instead of JSONP - API may not support JSONP', data.substring(0, 200));
+            reject(new Error('VWorld API does not support JSONP for administrative boundaries. Response: ' + data.substring(0, 100)));
+            return;
+          }
+          
           // ✅ 응답 검증 (기존 지적 기능과 동일한 패턴)
           if (data && data.response && data.response.status === 'OK' && data.response.result) {
             const featureCollection = data.response.result.featureCollection;
@@ -110,12 +117,21 @@ export class VWorldAPI {
               console.warn('VWorld API: No features found in response', data.response);
               resolve([]);
             }
+          } else if (data && data.response) {
+            // ✅ API 에러 응답 처리
+            console.error('VWorld API: API error response', data.response);
+            if (data.response.status === 'ERROR') {
+              reject(new Error(`VWorld API error: ${data.response.status?.text || 'Unknown error'}`));
+            } else {
+              console.warn('VWorld API: API error or invalid response', data.response);
+              resolve([]);
+            }
           } else {
-            console.warn('VWorld API: API error or invalid response', data?.response);
-            resolve([]);
+            console.warn('VWorld API: Invalid response format', data);
+            reject(new Error('Invalid API response format'));
           }
         } catch (error) {
-          console.error('VWorld API: Error processing JSONP response', error);
+          console.error('VWorld API: Error processing JSONP response', error, data);
           reject(new Error('Failed to process API response: ' + (error as Error).message));
         }
       };
@@ -123,15 +139,33 @@ export class VWorldAPI {
       const script = document.createElement('script');
       script.id = callbackName;
       script.src = `${url}&callback=${callbackName}`;
+      
+      // ✅ 스크립트 로드 완료 후 응답 확인 (JSONP가 작동하지 않는 경우 감지)
+      script.onload = () => {
+        // 스크립트가 로드되었지만 콜백이 호출되지 않은 경우 (일정 시간 후 확인)
+        setTimeout(() => {
+          if ((window as any)[callbackName]) {
+            console.error('VWorld API: JSONP callback was not called - API may not support JSONP');
+            clearTimeout(timeoutId);
+            delete (window as any)[callbackName];
+            const scriptElement = document.getElementById(callbackName);
+            if (scriptElement) {
+              scriptElement.remove();
+            }
+            reject(new Error('VWorld API does not support JSONP for this dataset. Please check API documentation.'));
+          }
+        }, 1000);
+      };
+      
       script.onerror = () => {
         clearTimeout(timeoutId);
-        console.error('VWorld API: Script load error');
+        console.error('VWorld API: Script load error - JSONP may not be supported');
         delete (window as any)[callbackName];
         const scriptElement = document.getElementById(callbackName);
         if (scriptElement) {
           scriptElement.remove();
         }
-        reject(new Error('Script load failed'));
+        reject(new Error('Script load failed - VWorld API may not support JSONP for administrative boundaries'));
       };
       
       document.body.appendChild(script);
