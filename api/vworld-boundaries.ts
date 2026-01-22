@@ -26,7 +26,7 @@ export default async function handler(
   }
 
   try {
-    const { level, bbox } = req.query;
+    const { level } = req.query;
 
     // 레벨 검증
     if (!level || (level !== 'sido' && level !== 'sigungu' && level !== 'emd')) {
@@ -139,16 +139,19 @@ export default async function handler(
     console.error('Error name:', errorObj.name);
     console.error('Error message:', errorObj.message);
     console.error('Error stack:', errorObj.stack);
-    console.error('Request params:', { level, bbox });
+    console.error('Request params:', { level });
     
-    const errorMessage = errorObj.message;
-    const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('aborted');
+    // 에러 타입별 처리
+    const errorMessage = errorObj.message || 'Unknown error';
+    const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('aborted') || errorObj.name === 'AbortError';
     
+    // Vercel 서버리스 함수 실행 실패를 위한 상세 정보
     return res.status(isTimeout ? 504 : 500).json({ 
       error: isTimeout ? 'Gateway Timeout' : 'Internal server error',
       message: errorMessage,
-      errorName: errorObj.name,
-      details: errorObj.stack || 'No stack trace available'
+      errorName: errorObj.name || 'Error',
+      details: errorObj.stack || 'No stack trace available',
+      timestamp: new Date().toISOString()
     });
   }
 }

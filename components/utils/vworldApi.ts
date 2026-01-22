@@ -45,13 +45,11 @@ export class VWorldAPI {
     level: 'sido' | 'sigungu' | 'emd',
     bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
   ): Promise<AdministrativeBoundary[]> {
-    // ✅ 환경 감지 제거: 프록시를 항상 시도 (로컬에서도 Vercel CLI로 테스트 가능)
-    let url = `/api/vworld-boundaries?level=${level}`;
+    // ✅ bbox 파라미터 제거: VWorld API 행정경계 데이터셋은 bbox를 지원하지 않음
+    // 전체 데이터를 조회한 후 클라이언트에서 필터링
+    const url = `/api/vworld-boundaries?level=${level}`;
     
-    if (bounds) {
-      const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
-      url += `&bbox=${encodeURIComponent(bbox)}`;
-    }
+    // bounds는 클라이언트 측 필터링에만 사용 (서버 요청에는 포함하지 않음)
     
     try {
       const response = await fetch(url);
@@ -126,20 +124,32 @@ export class VWorldAPI {
       // ✅ 클라이언트 측에서 bounds 필터링 (bbox 파라미터가 지원되지 않는 경우)
       if (bounds) {
         boundaries = boundaries.filter(boundary => {
-          // 간단한 bounds 체크: geometry의 첫 번째 좌표로 판단
           try {
             const coords = boundary.geometry.coordinates;
-            if (coords && coords.length > 0 && coords[0] && coords[0].length > 0) {
-              const firstCoord = coords[0][0];
-              const [lng, lat] = Array.isArray(firstCoord) ? firstCoord : [firstCoord[0], firstCoord[1]];
-              return lng >= bounds.minLng && lng <= bounds.maxLng && 
-                     lat >= bounds.minLat && lat <= bounds.maxLat;
+            // GeoJSON Polygon 형식: coordinates[0]는 외곽 링, 각 요소는 [lng, lat]
+            if (coords && Array.isArray(coords) && coords.length > 0) {
+              const ring = coords[0]; // 첫 번째 링 (외곽)
+              if (Array.isArray(ring) && ring.length > 0) {
+                // 링의 모든 좌표를 확인하여 bounds와 겹치는지 체크
+                for (const coord of ring) {
+                  if (Array.isArray(coord) && coord.length >= 2) {
+                    const [lng, lat] = coord;
+                    // bounds와 겹치면 포함
+                    if (lng >= bounds.minLng && lng <= bounds.maxLng && 
+                        lat >= bounds.minLat && lat <= bounds.maxLat) {
+                      return true;
+                    }
+                  }
+                }
+              }
             }
+            // 필터링 실패 시 제외 (안전하게)
+            return false;
           } catch (e) {
-            // 필터링 실패 시 포함
-            return true;
+            console.warn('Failed to filter boundary:', boundary.id, e);
+            // 필터링 실패 시 제외
+            return false;
           }
-          return true;
         });
       }
       
