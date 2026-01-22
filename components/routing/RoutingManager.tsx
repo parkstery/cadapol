@@ -25,6 +25,9 @@ export class RoutingManager {
         this.routingProvider = new GoogleRoutingProvider();
       } else if (providerName === 'kakao') {
         this.routingProvider = new KakaoRoutingProvider();
+      } else if (providerName === 'Naver') {
+        // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
+        this.routingProvider = new KakaoRoutingProvider();
       } else {
         this.routingProvider = null;
       }
@@ -48,24 +51,42 @@ export class RoutingManager {
     
     // 지명을 좌표로 변환
     const providerName = this.mapProvider.getName();
-    const originResult = await geocode(origin, providerName as 'google' | 'kakao' | 'naver');
-    const destinationResult = await geocode(destination, providerName as 'google' | 'kakao' | 'naver');
+    // 네이버 맵일 때는 카카오 geocode 사용 (네이버는 직접 geocode가 제한적)
+    const geocodeProvider = providerName === 'Naver' ? 'kakao' : (providerName.toLowerCase() as 'google' | 'kakao' | 'naver');
     
-    if (!originResult || !destinationResult) {
-      throw new Error('Failed to geocode origin or destination');
+    console.log('[Routing] Geocoding origin:', origin, 'with provider:', geocodeProvider);
+    const originResult = await geocode(origin, geocodeProvider);
+    console.log('[Routing] Origin geocode result:', originResult);
+    
+    console.log('[Routing] Geocoding destination:', destination, 'with provider:', geocodeProvider);
+    const destinationResult = await geocode(destination, geocodeProvider);
+    console.log('[Routing] Destination geocode result:', destinationResult);
+    
+    if (!originResult) {
+      throw new Error(`출발지 "${origin}"를 찾을 수 없습니다. 주소나 지명을 확인해주세요.`);
+    }
+    
+    if (!destinationResult) {
+      throw new Error(`목적지 "${destination}"를 찾을 수 없습니다. 주소나 지명을 확인해주세요.`);
     }
     
     // 경유지 좌표 변환
     const waypointResults: Waypoint[] = [];
     for (let i = 0; i < waypoints.length; i++) {
-      const waypointResult = await geocode(waypoints[i], providerName as 'google' | 'kakao' | 'naver');
-      if (waypointResult) {
-        waypointResults.push({
-          id: `waypoint-${i}`,
-          position: { lat: waypointResult.lat, lng: waypointResult.lng },
-          label: waypoints[i],
-          order: i + 1
-        });
+      if (waypoints[i].trim()) {
+        console.log('[Routing] Geocoding waypoint:', waypoints[i], 'with provider:', geocodeProvider);
+        const waypointResult = await geocode(waypoints[i], geocodeProvider);
+        console.log('[Routing] Waypoint geocode result:', waypointResult);
+        if (waypointResult) {
+          waypointResults.push({
+            id: `waypoint-${i}`,
+            position: { lat: waypointResult.lat, lng: waypointResult.lng },
+            label: waypoints[i],
+            order: i + 1
+          });
+        } else {
+          console.warn(`[Routing] 경유지 "${waypoints[i]}"를 찾을 수 없습니다. 경유지가 제외됩니다.`);
+        }
       }
     }
     
@@ -90,9 +111,21 @@ export class RoutingManager {
     };
     
     // 경로 계산
-    const routes = await this.routingProvider.calculateRoute(routeOptions);
+    console.log('[Routing] Calculating route with options:', {
+      origin: routeOptions.waypoints[0],
+      destination: routeOptions.waypoints[routeOptions.waypoints.length - 1],
+      waypoints: routeOptions.waypoints.slice(1, -1),
+      travelMode: routeOptions.travelMode
+    });
     
-    return routes;
+    try {
+      const routes = await this.routingProvider.calculateRoute(routeOptions);
+      console.log('[Routing] Route calculation successful:', routes.length, 'routes found');
+      return routes;
+    } catch (error) {
+      console.error('[Routing] Route calculation failed:', error);
+      throw error;
+    }
   }
   
   /**

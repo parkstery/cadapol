@@ -3623,15 +3623,28 @@ const MapPane: React.FC<MapPaneProps> = ({
         <RoutingPanel
           onCalculate={async (origin, destination, waypoints) => {
             try {
+              console.log('[Routing] Starting route calculation:', { origin, destination, waypoints });
+              
+              if (!routingManagerRef.current) {
+                throw new Error('RoutingManager가 초기화되지 않았습니다.');
+              }
+              
               const routes = await routingManagerRef.current.calculateRouteFromPlaces(
                 origin,
                 destination,
                 waypoints
               );
+              
+              if (routes.length === 0) {
+                throw new Error('경로를 찾을 수 없습니다.');
+              }
+              
               routingManagerRef.current.displayRoutes(routes);
+              console.log('[Routing] Routes displayed successfully');
             } catch (error) {
-              console.error('Route calculation failed:', error);
-              alert('경로를 찾을 수 없습니다. 출발지와 목적지를 확인해주세요.');
+              console.error('[Routing] Route calculation failed:', error);
+              const errorMessage = error instanceof Error ? error.message : '경로를 찾을 수 없습니다. 출발지와 목적지를 확인해주세요.';
+              alert(errorMessage);
             }
           }}
           onClose={() => {
