@@ -57,14 +57,35 @@ export class VWorldAPI {
       const response = await fetch(url);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        // 에러 응답 본문 읽기 시도
+        let errorText = '';
+        let errorData: any = null;
+        
+        try {
+          errorText = await response.text();
+          if (errorText) {
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              // JSON이 아니면 텍스트로 사용
+              errorData = { error: errorText.substring(0, 200), raw: errorText };
+            }
+          }
+        } catch (e) {
+          errorText = 'Failed to read error response';
+          errorData = { error: 'Unknown error', readError: (e as Error).message };
+        }
+        
         console.error('Proxy error details:', {
           status: response.status,
           statusText: response.statusText,
           url,
-          error: errorData
+          errorText: errorText.substring(0, 500),
+          errorData
         });
-        throw new Error(`Proxy error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+        
+        const errorMessage = errorData?.error || errorData?.message || errorText || 'Unknown error';
+        throw new Error(`Proxy error: ${response.status} - ${errorMessage}`);
       }
       
         const data = await response.json();

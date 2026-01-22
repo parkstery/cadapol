@@ -82,7 +82,25 @@ export default async function handler(
         });
       }
 
-      const data = await response.json();
+      // 응답 본문 읽기
+      let responseText = '';
+      let data: any = null;
+      
+      try {
+        responseText = await response.text();
+        if (!responseText) {
+          throw new Error('Empty response from VWorld API');
+        }
+        data = JSON.parse(responseText);
+      } catch (parseError: any) {
+        console.error('Failed to parse VWorld API response:', parseError);
+        console.error('Response text:', responseText.substring(0, 1000));
+        return res.status(500).json({ 
+          error: 'Failed to parse API response',
+          details: parseError.message,
+          responsePreview: responseText.substring(0, 500)
+        });
+      }
 
       // 응답 검증
       if (!data || !data.response) {
