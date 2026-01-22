@@ -132,14 +132,29 @@ export class AdministrativeBoundaryLayer implements Layer {
       let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
       
       if (!bounds) {
-        console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
-        // 기본 bounds 사용 (서울 지역)
-        bounds = {
-          minLat: 37.4,
-          minLng: 126.8,
-          maxLat: 37.7,
-          maxLng: 127.2
-        };
+        // ✅ 안전한 기본 bbox 사용 (서울 시청 인근, sigungu 1~2개 수준)
+        // 전국 bbox를 사용하면 반드시 실패하므로 작은 범위 사용
+        const center = this.getMapCenter(mapInstance, mapProvider.getName());
+        if (center) {
+          // 중심 기준 작은 범위 (약 2km)
+          const delta = 0.01;
+          bounds = {
+            minLat: center.lat - delta,
+            minLng: center.lng - delta,
+            maxLat: center.lat + delta,
+            maxLng: center.lng + delta
+          };
+          console.warn(`[Boundary] Cannot get map bounds, using center-based safe bbox:`, bounds);
+        } else {
+          // center도 가져오지 못한 경우 안전한 기본값 (서울 시청 인근)
+          bounds = {
+            minLat: 37.55,
+            minLng: 126.95,
+            maxLat: 37.58,
+            maxLng: 126.99
+          };
+          console.warn(`[Boundary] Cannot get map bounds or center, using default safe bbox:`, bounds);
+        }
       }
       
       // ✅ emd 레벨일 때 bbox 면적 제한 체크

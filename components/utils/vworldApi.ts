@@ -45,17 +45,16 @@ export class VWorldAPI {
     level: 'sido' | 'sigungu' | 'emd',
     bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
   ): Promise<AdministrativeBoundary[]> {
-    // ✅ 테스트용: dong(emd) 레벨일 때는 bbox 파라미터 포함 (자문단 권장)
-    // sido/sigungu는 전체 데이터 조회 후 클라이언트 필터링
-    let url = `/api/vworld-boundaries?level=${level}`;
-    
-    if (level === 'emd' && bounds) {
-      // dong 레벨: bbox 파라미터 포함 (VWorld API가 안정적으로 응답)
-      const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
-      url += `&bbox=${encodeURIComponent(bbox)}`;
-      console.log(`[Test Mode] Requesting dong boundaries with bbox:`, bbox);
+    // ✅ 운영 기준: 모든 레벨에서 bbox 필수 (자문단 권장)
+    // sido/sigungu/emd 모두 bbox 없이 호출하면 전국 데이터 요청으로 502 에러 발생
+    if (!bounds) {
+      throw new Error(`Bounds are required for ${level} level. Cannot request without bbox.`);
     }
-    // sido/sigungu는 bbox 없이 전체 데이터 조회 (bounds는 클라이언트 필터링에만 사용)
+    
+    const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+    const url = `/api/vworld-boundaries?level=${level}&bbox=${encodeURIComponent(bbox)}`;
+    
+    console.log(`[Boundary] Requesting ${level} boundaries with bbox:`, bbox);
     
     try {
       const response = await fetch(url);
