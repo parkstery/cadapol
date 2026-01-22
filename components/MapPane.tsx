@@ -118,7 +118,6 @@ const MapPane: React.FC<MapPaneProps> = ({
   // 🆕 길찾기 관리자
   const routingManagerRef = useRef<RoutingManager>(new RoutingManager());
   const [isRoutingPanelOpen, setIsRoutingPanelOpen] = useState(false);
-  const [isAdministrativeLayerOn, setIsAdministrativeLayerOn] = useState(false);
 
   // Helper: Zoom conversion
   const zoomToKakao = (z: number) => Math.max(1, Math.min(14, 20 - z));
@@ -3438,50 +3437,6 @@ const MapPane: React.FC<MapPaneProps> = ({
             }}
         />
       )}
-      
-      {/* 🆕 행정경계 레이어 토글 버튼 */}
-      <button
-        onClick={async () => {
-          const newState = !isAdministrativeLayerOn;
-          setIsAdministrativeLayerOn(newState);
-          
-          try {
-            if (newState) {
-              // 행정경계 레이어 추가
-              // ✅ 테스트용: dong(emd) 레벨 사용 (자문단 권장 - 가장 안정적)
-              const layerConfig = createDefaultLayerConfig(
-                LayerType.ADMINISTRATIVE_BOUNDARY,
-                '행정경계 (읍면동)',
-                { options: { level: 'emd' } }
-              );
-              // ✅ await 추가
-              await layerManagerRef.current.addLayer(layerConfig);
-              console.log('Administrative boundary layer added successfully');
-            } else {
-              // 행정경계 레이어 제거
-              const layers = layerManagerRef.current.getAllLayers();
-              layers.forEach(layer => {
-                if (layer.getType() === LayerType.ADMINISTRATIVE_BOUNDARY) {
-                  layerManagerRef.current.removeLayer(layer.getId());
-                }
-              });
-            }
-          } catch (error) {
-            console.error('Failed to toggle administrative boundary layer:', error);
-            // ✅ 사용자에게 피드백
-            alert('행정경계 레이어를 불러오는 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
-            setIsAdministrativeLayerOn(!newState); // 상태 롤백
-          }
-        }}
-        className={`absolute top-20 ${config.type === 'naver' ? 'right-[100px]' : 'right-4'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
-          isAdministrativeLayerOn ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-        }`}
-        title={isAdministrativeLayerOn ? '행정경계 끄기' : '행정경계 켜기'}
-      >
-        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-        </svg>
-      </button>
       
       {/* 🆕 길찾기 버튼 */}
       <button

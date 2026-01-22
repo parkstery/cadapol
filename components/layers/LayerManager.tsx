@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { LayerConfig, LayerType } from '../../types';
 import { Layer, MapProvider } from '../map-providers/BaseMapProvider';
-import { AdministrativeBoundaryLayer } from './AdministrativeBoundaryLayer';
 import { createDefaultLayerConfig } from './BaseLayer';
 
 interface LayerManagerProps {
@@ -39,9 +38,7 @@ export class LayerManager {
     let layer: Layer;
     
     switch (config.type) {
-      case LayerType.ADMINISTRATIVE_BOUNDARY:
-        layer = new AdministrativeBoundaryLayer(config);
-        break;
+      // 행정경계 레이어는 제거됨
       default:
         throw new Error(`Unsupported layer type: ${config.type}`);
     }

@@ -42,7 +42,7 @@ export enum GISMode {
 // 🆕 레이어 관련 타입
 export enum LayerType {
   CADASTRAL = 'cadastral',
-  ADMINISTRATIVE_BOUNDARY = 'administrative_boundary',
+  // ADMINISTRATIVE_BOUNDARY = 'administrative_boundary', // 제거됨
   TOPOGRAPHIC = 'topographic',
   CUSTOM = 'custom'
 }
