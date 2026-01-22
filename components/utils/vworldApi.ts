@@ -109,11 +109,11 @@ export class VWorldAPI {
       const features = data.response.result.featureCollection.features || [];
       
       if (features.length === 0) {
-        console.warn('VWorld API: No features found for the specified bounds');
+        console.warn('VWorld API: No features found');
         return [];
       }
       
-      const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+      let boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
         const props = feature.properties || {};
         return {
           id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
@@ -123,7 +123,27 @@ export class VWorldAPI {
         };
       });
       
-      console.log(`VWorld API: Loaded ${boundaries.length} boundaries via proxy`);
+      // ✅ 클라이언트 측에서 bounds 필터링 (bbox 파라미터가 지원되지 않는 경우)
+      if (bounds) {
+        boundaries = boundaries.filter(boundary => {
+          // 간단한 bounds 체크: geometry의 첫 번째 좌표로 판단
+          try {
+            const coords = boundary.geometry.coordinates;
+            if (coords && coords.length > 0 && coords[0] && coords[0].length > 0) {
+              const firstCoord = coords[0][0];
+              const [lng, lat] = Array.isArray(firstCoord) ? firstCoord : [firstCoord[0], firstCoord[1]];
+              return lng >= bounds.minLng && lng <= bounds.maxLng && 
+                     lat >= bounds.minLat && lat <= bounds.maxLat;
+            }
+          } catch (e) {
+            // 필터링 실패 시 포함
+            return true;
+          }
+          return true;
+        });
+      }
+      
+      console.log(`VWorld API: Loaded ${boundaries.length} boundaries via proxy${bounds ? ` (filtered from ${features.length} total)` : ''}`);
       return boundaries;
     } catch (error) {
       console.error('Proxy fetch failed:', error);

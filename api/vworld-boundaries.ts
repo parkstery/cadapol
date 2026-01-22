@@ -47,14 +47,16 @@ export default async function handler(
         break;
     }
 
-    // VWorld API URL 구성 (원래 형식 - 버전 파라미터 없음)
-    // 참고: VWorld API는 버전 파라미터를 지원하지 않거나, 버전 파라미터가 오류를 유발할 수 있음
+    // VWorld API URL 구성
+    // 참고: 행정경계 데이터셋은 bbox 파라미터를 지원하지 않을 수 있음
+    // bbox 없이 전체 데이터를 조회한 후 클라이언트에서 필터링하는 방식 고려
     let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
 
-    // bbox 파라미터 추가 (선택사항)
-    if (bbox && typeof bbox === 'string') {
-      url += `&bbox=${bbox}`;
-    }
+    // ⚠️ bbox 파라미터 제거: 행정경계 데이터셋은 bbox를 지원하지 않을 수 있음
+    // 대신 전체 데이터를 조회하고 클라이언트에서 필터링
+    // if (bbox && typeof bbox === 'string') {
+    //   url += `&bbox=${bbox}`;
+    // }
 
     // VWorld API 호출 (타임아웃 설정)
     const controller = new AbortController();
