@@ -3468,19 +3468,23 @@ const MapPane: React.FC<MapPaneProps> = ({
         ref={containerRef} 
         className={`transition-all duration-300 ease-in-out bg-white
           ${isStreetViewActive 
-            ? 'absolute z-[9999] border-4 border-white shadow-2xl rounded-lg overflow-hidden' 
+            ? 'absolute z-[9999] border-4 border-white shadow-2xl rounded-lg overflow-hidden m-0 p-0' 
             : 'w-full h-full z-0'
           }`}
         style={isStreetViewActive ? {
           position: 'absolute',
-          // 거리뷰 창의 좌측과 하단에 바짝 붙이기
+          // 좌우 pane의 좌하단 가장자리 모서리에 일치시키기
+          // border-4는 16px이므로, border의 바깥쪽 가장자리가 pane의 가장자리에 맞도록 조정
           bottom: '0',
           left: '0',
           top: 'auto',
           right: 'auto',
           // 모바일에서 60% 크기, 데스크톱에서 기본 크기
           width: isMobile ? `${MINIMAP_SIZE.mobileWidth}px` : `${MINIMAP_SIZE.width}px`,
-          height: isMobile ? `${MINIMAP_SIZE.mobileHeight}px` : `${MINIMAP_SIZE.height}px`
+          height: isMobile ? `${MINIMAP_SIZE.mobileHeight}px` : `${MINIMAP_SIZE.height}px`,
+          // border의 바깥쪽 가장자리가 pane의 가장자리에 정확히 맞도록 margin 제거
+          margin: '0',
+          padding: '0'
         } : {}}
       />
 
