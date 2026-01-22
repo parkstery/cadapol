@@ -20,10 +20,6 @@ export class KakaoRoutingProvider implements RoutingProvider {
   }
   
   async calculateRoute(options: RouteOptions): Promise<Route[]> {
-    if (!window.kakao || !window.kakao.maps) {
-      throw new Error('Kakao Maps SDK not loaded');
-    }
-    
     const waypoints = options.waypoints;
     if (waypoints.length < 2) {
       throw new Error('At least origin and destination required');
@@ -33,36 +29,41 @@ export class KakaoRoutingProvider implements RoutingProvider {
     const destination = waypoints[waypoints.length - 1];
     const intermediateWaypoints = waypoints.slice(1, -1);
     
-    // 카카오 REST API를 사용한 경로 찾기
-    const KAKAO_REST_API_KEY = '8d2d116d6a534a98e73133808f5843a6';
-    const baseUrl = 'https://apis-navi.kakao.com/v1/directions';
+    // Vercel API Route를 통한 Kakao Mobility Directions REST API 호출
+    const apiUrl = '/api/kakao-route';
     
-    // 경유지가 있으면 waypoints 파라미터 추가
-    let waypointsParam = '';
-    if (intermediateWaypoints.length > 0) {
-      const waypointsStr = intermediateWaypoints
-        .map(wp => `${wp.position.lng},${wp.position.lat}`)
-        .join('|');
-      waypointsParam = `&waypoints=${encodeURIComponent(waypointsStr)}`;
-    }
-    
-    // 이동 수단에 따른 옵션
-    const summary = options.travelMode === 'walking' ? '&summary=walking' : '&summary=driving';
-    
-    const url = `${baseUrl}?origin=${origin.position.lng},${origin.position.lat}&destination=${destination.position.lng},${destination.position.lat}${waypointsParam}${summary}`;
+    const requestBody = {
+      origin: {
+        lat: origin.position.lat,
+        lng: origin.position.lng
+      },
+      destination: {
+        lat: destination.position.lat,
+        lng: destination.position.lng
+      },
+      waypoints: intermediateWaypoints.length > 0 
+        ? intermediateWaypoints.map(wp => ({
+            lat: wp.position.lat,
+            lng: wp.position.lng
+          }))
+        : undefined,
+      summary: options.travelMode === 'walking' ? 'walking' : 'driving'
+    };
     
     try {
-      const response = await fetch(url, {
-        method: 'GET',
+      console.log('[KakaoRoutingProvider] Calling Kakao Directions API via proxy:', requestBody);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
         headers: {
-          'Authorization': `KakaoAK ${KAKAO_REST_API_KEY}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(requestBody)
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Kakao Directions API error: ${response.status} - ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Kakao Directions API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
       }
       
       const data = await response.json();
@@ -70,6 +71,8 @@ export class KakaoRoutingProvider implements RoutingProvider {
       if (!data.routes || data.routes.length === 0) {
         throw new Error('No routes found');
       }
+      
+      console.log('[KakaoRoutingProvider] Received routes:', data.routes.length);
       
       const routes: Route[] = data.routes.map((route: any, index: number) => {
         const summary = route.summary || {};
@@ -89,13 +92,15 @@ export class KakaoRoutingProvider implements RoutingProvider {
                 polyline: []
               });
               
-              // vertexes에서 polyline 생성
-              if (road.vertexes) {
+              // vertexes에서 polyline 생성 (카카오 API는 [lng, lat, lng, lat, ...] 형식)
+              if (road.vertexes && Array.isArray(road.vertexes)) {
                 for (let i = 0; i < road.vertexes.length; i += 2) {
-                  polyline.push({
-                    lat: road.vertexes[i + 1],
-                    lng: road.vertexes[i]
-                  });
+                  if (i + 1 < road.vertexes.length) {
+                    polyline.push({
+                      lat: road.vertexes[i + 1], // y 좌표 (위도)
+                      lng: road.vertexes[i]      // x 좌표 (경도)
+                    });
+                  }
                 }
               }
             });
@@ -111,6 +116,7 @@ export class KakaoRoutingProvider implements RoutingProvider {
         };
       });
       
+      console.log('[KakaoRoutingProvider] Parsed routes:', routes.length);
       return routes;
     } catch (error) {
       console.error('[KakaoRoutingProvider] Route calculation failed:', error);
