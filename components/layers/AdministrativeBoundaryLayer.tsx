@@ -69,11 +69,11 @@ export class AdministrativeBoundaryLayer implements Layer {
     }
     
     try {
-      // ✅ 맵이 완전히 로드될 때까지 대기
-      await this.waitForMapReady(mapInstance, mapProvider.getName());
+      // ✅ 맵이 준비될 때까지 짧은 대기 (기존 지적 기능과 유사한 방식)
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // ✅ bounds 가져오기 재시도 로직 개선
-      let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 3);
+      // ✅ bounds 가져오기 재시도 로직 (더 관대하게)
+      let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
       
       if (!bounds) {
         console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
@@ -120,50 +120,24 @@ export class AdministrativeBoundaryLayer implements Layer {
     }
   }
   
-  // ✅ 새로운 헬퍼 메서드 추가
-  private async waitForMapReady(mapInstance: any, providerName: string): Promise<void> {
-    const maxAttempts = 10;
-    const delay = 200;
-    
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        if (providerName === 'google') {
-          if (mapInstance.getBounds && mapInstance.getCenter) {
-            const bounds = mapInstance.getBounds();
-            const center = mapInstance.getCenter();
-            if (bounds && center) return;
-          }
-        } else if (providerName === 'kakao') {
-          if (mapInstance.getBounds && mapInstance.getCenter) {
-            const bounds = mapInstance.getBounds();
-            const center = mapInstance.getCenter();
-            if (bounds && center) return;
-          }
-        } else if (providerName === 'naver') {
-          if (mapInstance.getBounds && mapInstance.getCenter) {
-            const bounds = mapInstance.getBounds();
-            const center = mapInstance.getCenter();
-            if (bounds && center) return;
-          }
-        }
-      } catch (error) {
-        // 계속 시도
-      }
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-    
-    throw new Error('Map instance not ready after maximum attempts');
-  }
-  
   private async getMapBoundsWithRetry(
     mapInstance: any,
     providerName: string,
     maxRetries: number
   ): Promise<{ minLat: number; minLng: number; maxLat: number; maxLng: number } | undefined> {
+    // ✅ 더 관대한 재시도 로직: 각 시도 사이에 대기 시간 증가
     for (let i = 0; i < maxRetries; i++) {
-      const bounds = this.getMapBounds(mapInstance, providerName);
-      if (bounds) return bounds;
-      await new Promise(resolve => setTimeout(resolve, 300));
+      try {
+        const bounds = this.getMapBounds(mapInstance, providerName);
+        if (bounds) return bounds;
+      } catch (error) {
+        // 에러가 발생해도 계속 시도
+        console.warn(`Attempt ${i + 1} failed to get bounds:`, error);
+      }
+      
+      // 재시도 간 대기 시간 (점진적 증가)
+      const delay = 200 * (i + 1); // 200ms, 400ms, 600ms, 800ms, 1000ms
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
     return undefined;
   }
