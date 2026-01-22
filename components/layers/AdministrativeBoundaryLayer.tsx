@@ -239,6 +239,48 @@ export class AdministrativeBoundaryLayer implements Layer {
   }
   
   /**
+   * 지도 중심 좌표 가져오기 (dong 레벨 테스트용)
+   */
+  private getMapCenter(mapInstance: any, providerName: string): { lat: number; lng: number } | null {
+    try {
+      if (providerName === 'google') {
+        const center = mapInstance.getCenter();
+        if (center) {
+          return {
+            lat: center.lat(),
+            lng: center.lng()
+          };
+        }
+      } else if (providerName === 'kakao') {
+        const center = mapInstance.getCenter();
+        if (center && typeof center.getLat === 'function') {
+          return {
+            lat: center.getLat(),
+            lng: center.getLng()
+          };
+        }
+      } else if (providerName === 'naver') {
+        const center = mapInstance.getCenter();
+        if (center && typeof center.lat === 'function') {
+          return {
+            lat: center.lat(),
+            lng: center.lng()
+          };
+        } else if (center && typeof center.y === 'number') {
+          // Naver Maps v3 API
+          return {
+            lat: center.y,
+            lng: center.x
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to get map center:', error);
+    }
+    return null;
+  }
+  
+  /**
    * center와 zoom으로부터 bounds 계산
    */
   private calculateBoundsFromCenter(lat: number, lng: number, zoom: number, providerName: string): { minLat: number; minLng: number; maxLat: number; maxLng: number } {
