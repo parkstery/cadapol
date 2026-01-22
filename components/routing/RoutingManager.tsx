@@ -33,28 +33,32 @@ export class RoutingManager {
     
     // 맵 제공자에 맞는 RoutingProvider 생성
     const providerName = provider.getName();
+    const providerNameLower = providerName.toLowerCase();
     console.log('[RoutingManager] Creating routing provider for:', providerName, {
       providerType: typeof providerName,
-      providerValue: JSON.stringify(providerName)
+      providerValue: JSON.stringify(providerName),
+      providerNameLower
     });
     
     try {
-      if (providerName === 'google') {
+      // 대소문자 구분 없이 비교
+      if (providerNameLower === 'google') {
         this.routingProvider = new GoogleRoutingProvider();
         console.log('[RoutingManager] GoogleRoutingProvider created');
-      } else if (providerName === 'kakao') {
+      } else if (providerNameLower === 'kakao') {
         this.routingProvider = new KakaoRoutingProvider();
         console.log('[RoutingManager] KakaoRoutingProvider created');
-      } else if (providerName === 'Naver') {
+      } else if (providerNameLower === 'naver') {
         // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
         this.routingProvider = new KakaoRoutingProvider();
         console.log('[RoutingManager] KakaoRoutingProvider created for Naver map');
       } else {
         console.error('[RoutingManager] Unsupported provider name:', {
           providerName,
+          providerNameLower,
           providerNameType: typeof providerName,
           providerNameLength: providerName?.length,
-          allProviderNames: ['google', 'kakao', 'Naver']
+          allProviderNames: ['google', 'kakao', 'naver']
         });
         this.routingProvider = null;
         throw new Error(`지원되지 않는 맵 제공자입니다: ${providerName}`);
@@ -119,8 +123,9 @@ export class RoutingManager {
     
     // 지명을 좌표로 변환
     const providerName = this.mapProvider.getName();
+    const providerNameLower = providerName.toLowerCase();
     // 네이버 맵일 때는 카카오 geocode 사용 (네이버는 직접 geocode가 제한적)
-    const geocodeProvider = providerName === 'Naver' ? 'kakao' : (providerName.toLowerCase() as 'google' | 'kakao' | 'naver');
+    const geocodeProvider = providerNameLower === 'naver' ? 'kakao' : (providerNameLower as 'google' | 'kakao' | 'naver');
     
     console.log('[Routing] Geocoding origin:', origin, 'with provider:', geocodeProvider);
     const originResult = await geocode(origin, geocodeProvider);
