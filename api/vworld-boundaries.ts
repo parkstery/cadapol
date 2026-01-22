@@ -47,9 +47,9 @@ export default async function handler(
         break;
     }
 
-    // VWorld API URL 구성 (버전 1.0 사용 - 행정경계는 2.0 미지원 가능성)
-    // 참고: 지적 경계는 2.0 지원, 행정경계는 1.0만 지원할 수 있음
-    let url = `https://api.vworld.kr/req/data?service=data&version=1.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    // VWorld API URL 구성 (원래 형식 - 버전 파라미터 없음)
+    // 참고: VWorld API는 버전 파라미터를 지원하지 않거나, 버전 파라미터가 오류를 유발할 수 있음
+    let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
 
     // bbox 파라미터 추가 (선택사항)
     if (bbox && typeof bbox === 'string') {
