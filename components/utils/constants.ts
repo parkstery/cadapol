@@ -23,6 +23,9 @@ export const RESIZE_DELAY = 100;
 export const MINIMAP_SIZE = {
   width: 240,
   height: 240,
+  // 모바일에서 60% 크기
+  mobileWidth: 144,  // 240 * 0.6
+  mobileHeight: 144, // 240 * 0.6
 };
 
 // 검색 기록 최대 개수

@@ -18,6 +18,7 @@ import { createDefaultLayerConfig } from './layers/BaseLayer';
 // 🆕 길찾기 시스템
 import { RoutingManager } from './routing/RoutingManager';
 import { RoutingPanel } from './RoutingPanel';
+import { MINIMAP_SIZE } from './utils/constants';
 
 // VWorld API 설정
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
@@ -3451,17 +3452,22 @@ const MapPane: React.FC<MapPaneProps> = ({
         ref={containerRef} 
         className={`transition-all duration-300 ease-in-out bg-white
           ${isStreetViewActive 
-            ? 'absolute w-[240px] h-[240px] z-[9999] border-4 border-white shadow-2xl rounded-lg overflow-hidden' 
+            ? 'absolute z-[9999] border-4 border-white shadow-2xl rounded-lg overflow-hidden' 
             : 'w-full h-full z-0'
           }`}
         style={isStreetViewActive ? {
           position: 'absolute',
-          bottom: '12px',  // bottom-3 = 0.75rem = 12px
-          left: '12px',    // left-3 = 0.75rem = 12px
+          bottom: '12px',
+          left: '12px',
           top: 'auto',
           right: 'auto',
-          width: '240px',
-          height: '240px'
+          // 모바일에서 60% 크기, 데스크톱에서 기본 크기
+          width: typeof window !== 'undefined' && window.innerWidth < 768 
+            ? `${MINIMAP_SIZE.mobileWidth}px` 
+            : `${MINIMAP_SIZE.width}px`,
+          height: typeof window !== 'undefined' && window.innerWidth < 768 
+            ? `${MINIMAP_SIZE.mobileHeight}px` 
+            : `${MINIMAP_SIZE.height}px`
         } : {}}
       />
 
