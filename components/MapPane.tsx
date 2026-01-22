@@ -510,8 +510,20 @@ const MapPane: React.FC<MapPaneProps> = ({
     const timer = setTimeout(() => {
       try {
         if (config.type === 'google') {
-          window.google.maps.event.trigger(mapRef.current, 'resize');
-          mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
+          // ✅ Google Maps 인스턴스 확인 및 좌표 재검증
+          if (mapRef.current && 
+              window.google && window.google.maps &&
+              typeof mapRef.current.setCenter === 'function' &&
+              typeof globalState.lat === 'number' && 
+              typeof globalState.lng === 'number' &&
+              isFinite(globalState.lat) && isFinite(globalState.lng)) {
+            try {
+              window.google.maps.event.trigger(mapRef.current, 'resize');
+              mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
+            } catch (e) {
+              console.error('Google Maps resize/setCenter error:', e, { lat: globalState.lat, lng: globalState.lng });
+            }
+          }
         } else if (config.type === 'kakao') {
           // 카카오맵 리사이즈 처리 (미니맵 전환 시 중요)
           mapRef.current.relayout();
