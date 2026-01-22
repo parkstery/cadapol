@@ -13,6 +13,10 @@ export class RoutingManager {
   private currentRouteDisplays: RouteDisplay[] = [];
   
   setMapProvider(provider: MapProvider | null): void {
+    console.log('[RoutingManager] setMapProvider called', {
+      provider: provider?.getName() || 'null'
+    });
+    
     this.mapProvider = provider;
     
     // 기존 경로 제거
@@ -21,6 +25,8 @@ export class RoutingManager {
     // 맵 제공자에 맞는 RoutingProvider 생성
     if (provider) {
       const providerName = provider.getName();
+      console.log('[RoutingManager] Creating routing provider for:', providerName);
+      
       if (providerName === 'google') {
         this.routingProvider = new GoogleRoutingProvider();
       } else if (providerName === 'kakao') {
@@ -29,8 +35,11 @@ export class RoutingManager {
         // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
         this.routingProvider = new KakaoRoutingProvider();
       } else {
+        console.warn('[RoutingManager] Unsupported provider name:', providerName);
         this.routingProvider = null;
       }
+      
+      console.log('[RoutingManager] Routing provider created:', !!this.routingProvider);
     } else {
       this.routingProvider = null;
     }
@@ -45,7 +54,17 @@ export class RoutingManager {
     waypoints: string[] = [],
     travelMode: 'driving' | 'walking' | 'transit' | 'bicycling' = 'driving'
   ): Promise<Route[]> {
+    console.log('[RoutingManager] calculateRouteFromPlaces called', {
+      hasRoutingProvider: !!this.routingProvider,
+      hasMapProvider: !!this.mapProvider,
+      mapProviderName: this.mapProvider?.getName()
+    });
+    
     if (!this.routingProvider || !this.mapProvider) {
+      console.error('[RoutingManager] Missing provider:', {
+        routingProvider: this.routingProvider,
+        mapProvider: this.mapProvider
+      });
       throw new Error('Routing provider or map provider not set');
     }
     
