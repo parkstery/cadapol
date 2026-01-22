@@ -80,19 +80,20 @@ export default async function handler(
     // VWorld API URL 구성
     // ✅ 테스트용: dong(emd) 레벨일 때는 bbox 파라미터 포함 (자문단 권장 - 가장 안정적)
     // sido/sigungu는 전체 데이터 조회 (캐싱 활용)
+    // ✅ 운영 기준: 모든 레벨에서 bbox 필수 (자문단 권장)
+    // sido/sigungu/emd 모두 bbox 없이 호출하면 전국 데이터 요청으로 502 에러 발생
     const { bbox } = req.query;
     
-    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
-
-    // dong(emd) 레벨: bbox 파라미터 포함 (가장 안정적인 방법)
-    if (level === 'emd' && bbox && typeof bbox === 'string') {
-      url += `&bbox=${bbox}`;
-      console.log(`[Test Mode] Using bbox parameter for dong level:`, bbox);
-    } else if (level === 'sigungu') {
-      // 시군구: size 제한 추가
-      url += `&size=1000`;
+    if (!bbox || typeof bbox !== 'string') {
+      return res.status(400).json({ 
+        error: 'Bbox parameter is required',
+        message: `Bbox is required for ${level} level. Cannot request without bbox.`
+      });
     }
-    // sido: size 제한 없음 (17개 정도)
+    
+    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&bbox=${bbox}`;
+    
+    console.log(`[Boundary] VWorld API request: level=${level}, bbox=${bbox}`);
 
     // VWorld API 호출 (타임아웃 설정)
     const controller = new AbortController();
