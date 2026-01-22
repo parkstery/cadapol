@@ -105,11 +105,18 @@ export class AdministrativeBoundaryLayer implements Layer {
    * 클릭 좌표로 읍면동 단일 폴리곤 조회 (자문단 권장 방식)
    */
   private async loadEmdByPoint(lat: number, lng: number): Promise<void> {
-    if (!this.mapProvider) return;
+    if (!this.mapProvider) {
+      console.warn('[Boundary] Map provider not available');
+      return;
+    }
+    
+    console.log(`[Boundary] Loading emd boundary for point: lat=${lat}, lng=${lng}`);
     
     try {
       // ✅ 좌표 기반 읍면동 조회 (geomFilter=POINT 사용)
+      console.log('[Boundary] Calling VWorldAPI.getAdministrativeBoundaryByPoint...');
       const boundaries = await VWorldAPI.getAdministrativeBoundaryByPoint(lat, lng);
+      console.log(`[Boundary] Received ${boundaries.length} boundaries from API`);
       
       if (boundaries.length === 0) {
         console.warn('[Boundary] No emd boundary found for the clicked point');
@@ -117,6 +124,7 @@ export class AdministrativeBoundaryLayer implements Layer {
       }
       
       // 기존 폴리곤 제거
+      console.log(`[Boundary] Removing ${this.polygons.length} existing polygons`);
       this.polygons.forEach(polygon => {
         try {
           if (polygon && typeof polygon.setMap === 'function') {
@@ -132,20 +140,32 @@ export class AdministrativeBoundaryLayer implements Layer {
       
       // 새 폴리곤 생성 (단일 읍면동만)
       const boundary = boundaries[0];
+      console.log(`[Boundary] Creating polygon for boundary: ${boundary.name} (${boundary.id})`);
       try {
         const polygon = this.createPolygon(boundary, this.mapProvider);
         if (polygon) {
           this.polygons = [polygon];
+          console.log(`[Boundary] Polygon created successfully`);
+          
           if (this.config.visible) {
+            console.log('[Boundary] Updating visibility...');
             this.updateVisibility();
+            console.log('[Boundary] Visibility updated');
+          } else {
+            console.warn('[Boundary] Layer is not visible, polygon may not be shown');
           }
-          console.log(`[Boundary] Loaded emd boundary: ${boundary.name}`);
+          
+          console.log(`[Boundary] Successfully loaded emd boundary: ${boundary.name}`);
+        } else {
+          console.error('[Boundary] createPolygon returned null');
         }
       } catch (error) {
-        console.error('Failed to create polygon for boundary:', boundary.id, error);
+        console.error('[Boundary] Failed to create polygon for boundary:', boundary.id, error);
+        console.error('[Boundary] Error details:', error);
       }
     } catch (error) {
       console.error('[Boundary] Failed to load emd boundary by point:', error);
+      console.error('[Boundary] Error stack:', (error as Error).stack);
     }
   }
 
@@ -166,26 +186,47 @@ export class AdministrativeBoundaryLayer implements Layer {
       
       if (providerName === 'kakao') {
         this.clickListener = (e: any) => {
+          console.log('[Boundary] Click event received (Kakao)');
           const pos = e.latLng;
           if (pos) {
-            this.loadEmdByPoint(pos.getLat(), pos.getLng());
+            const lat = pos.getLat();
+            const lng = pos.getLng();
+            console.log(`[Boundary] Click coordinates: lat=${lat}, lng=${lng}`);
+            this.loadEmdByPoint(lat, lng);
+          } else {
+            console.warn('[Boundary] No latLng in click event');
           }
         };
         window.kakao.maps.event.addListener(mapInstance, 'click', this.clickListener);
+        console.log('[Boundary] Kakao click listener registered');
       } else if (providerName === 'google') {
         this.clickListener = (e: any) => {
+          console.log('[Boundary] Click event received (Google)');
           if (e.latLng) {
-            this.loadEmdByPoint(e.latLng.lat(), e.latLng.lng());
+            const lat = e.latLng.lat();
+            const lng = e.latLng.lng();
+            console.log(`[Boundary] Click coordinates: lat=${lat}, lng=${lng}`);
+            this.loadEmdByPoint(lat, lng);
+          } else {
+            console.warn('[Boundary] No latLng in click event');
           }
         };
         mapInstance.addListener('click', this.clickListener);
+        console.log('[Boundary] Google click listener registered');
       } else if (providerName === 'naver') {
         this.clickListener = (e: any) => {
+          console.log('[Boundary] Click event received (Naver)');
           if (e.coord) {
-            this.loadEmdByPoint(e.coord.lat(), e.coord.lng());
+            const lat = e.coord.lat();
+            const lng = e.coord.lng();
+            console.log(`[Boundary] Click coordinates: lat=${lat}, lng=${lng}`);
+            this.loadEmdByPoint(lat, lng);
+          } else {
+            console.warn('[Boundary] No coord in click event');
           }
         };
         window.naver.maps.Event.addListener(mapInstance, 'click', this.clickListener);
+        console.log('[Boundary] Naver click listener registered');
       }
       
       console.log('[Boundary] Click listener registered. Click on map to show emd boundary.');
@@ -394,33 +435,38 @@ export class AdministrativeBoundaryLayer implements Layer {
   }
   
   private createPolygon(boundary: AdministrativeBoundary, mapProvider: MapProvider): any {
+    console.log(`[Boundary] createPolygon called for: ${boundary.name} (${boundary.id})`);
     const mapInstance = mapProvider.getMapInstance();
     const providerName = mapProvider.getName();
     
     if (!mapInstance) {
-      console.error('Map instance not available for polygon creation');
+      console.error('[Boundary] Map instance not available for polygon creation');
       return null;
     }
     
     try {
+      console.log(`[Boundary] Parsing geometry for boundary: ${boundary.id}`);
       const paths = this.parseGeometry(boundary.geometry);
+      console.log(`[Boundary] Parsed ${paths.length} paths from geometry`);
       
       if (paths.length === 0) {
-        console.warn(`No paths found for boundary: ${boundary.id}`);
+        console.warn(`[Boundary] No paths found for boundary: ${boundary.id}`);
         return null;
       }
       
       // ✅ 최소 3개 점 필요 (폴리곤)
       if (paths.length < 3) {
-        console.warn(`Insufficient points for polygon: ${boundary.id} (${paths.length} points)`);
+        console.warn(`[Boundary] Insufficient points for polygon: ${boundary.id} (${paths.length} points)`);
         return null;
       }
       
       let polygon: any = null;
       
       if (providerName === 'google') {
+        const googlePaths = paths.map(p => ({ lat: p[1], lng: p[0] }));
+        console.log(`[Boundary] Creating Google polygon with ${googlePaths.length} points`);
         polygon = new window.google.maps.Polygon({
-          paths: paths.map(p => ({ lat: p[1], lng: p[0] })),
+          paths: googlePaths,
           strokeColor: '#4285F4',
           strokeOpacity: this.config.opacity,
           strokeWeight: 2,
@@ -562,6 +608,7 @@ export class AdministrativeBoundaryLayer implements Layer {
   }
   
   private updateVisibility(): void {
+    console.log(`[Boundary] updateVisibility called. Visible: ${this.config.visible}, Polygons: ${this.polygons.length}`);
     this.polygons.forEach(polygon => {
       if (polygon && this.mapProvider) {
         const mapInstance = this.mapProvider.getMapInstance();
