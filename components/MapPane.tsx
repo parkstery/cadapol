@@ -58,6 +58,22 @@ const MapPane: React.FC<MapPaneProps> = ({
   
   // -- Street View / Road View States --
   const [isStreetViewActive, setIsStreetViewActive] = useState(false);
+  
+  // -- 반응형 미니맵 크기 --
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
 
   // Google Refs
   const googlePanoRef = useRef<HTMLDivElement>(null);
@@ -3462,12 +3478,8 @@ const MapPane: React.FC<MapPaneProps> = ({
           top: 'auto',
           right: 'auto',
           // 모바일에서 60% 크기, 데스크톱에서 기본 크기
-          width: typeof window !== 'undefined' && window.innerWidth < 768 
-            ? `${MINIMAP_SIZE.mobileWidth}px` 
-            : `${MINIMAP_SIZE.width}px`,
-          height: typeof window !== 'undefined' && window.innerWidth < 768 
-            ? `${MINIMAP_SIZE.mobileHeight}px` 
-            : `${MINIMAP_SIZE.height}px`
+          width: isMobile ? `${MINIMAP_SIZE.mobileWidth}px` : `${MINIMAP_SIZE.width}px`,
+          height: isMobile ? `${MINIMAP_SIZE.mobileHeight}px` : `${MINIMAP_SIZE.height}px`
         } : {}}
       />
 
