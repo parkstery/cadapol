@@ -3448,10 +3448,11 @@ const MapPane: React.FC<MapPaneProps> = ({
           try {
             if (newState) {
               // 행정경계 레이어 추가
+              // ✅ 테스트용: dong(emd) 레벨 사용 (자문단 권장 - 가장 안정적)
               const layerConfig = createDefaultLayerConfig(
                 LayerType.ADMINISTRATIVE_BOUNDARY,
-                '행정경계',
-                { options: { level: 'sido' } }
+                '행정경계 (읍면동)',
+                { options: { level: 'emd' } }
               );
               // ✅ await 추가
               await layerManagerRef.current.addLayer(layerConfig);

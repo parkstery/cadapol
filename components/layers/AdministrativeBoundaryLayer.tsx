@@ -13,7 +13,8 @@ export class AdministrativeBoundaryLayer implements Layer {
   
   constructor(config: LayerConfig) {
     this.config = config;
-    this.level = (config.options?.level as 'sido' | 'sigungu' | 'emd') || 'sido';
+    // ✅ 테스트용: 기본값을 'emd'로 변경 (자문단 권장)
+    this.level = (config.options?.level as 'sido' | 'sigungu' | 'emd') || 'emd';
   }
   
   getId(): string {
