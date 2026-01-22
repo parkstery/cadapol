@@ -71,6 +71,7 @@ export default async function handler(
 
     // 응답 검증
     if (!data || !data.response) {
+      console.error('Invalid response structure:', JSON.stringify(data).substring(0, 500));
       return res.status(500).json({ error: 'Invalid API response format' });
     }
 
@@ -86,9 +87,12 @@ export default async function handler(
     return res.status(200).json(data);
   } catch (error) {
     console.error('VWorld API proxy error:', error);
+    console.error('Request params:', { level, bbox });
+    console.error('Request URL:', url);
     return res.status(500).json({ 
       error: 'Internal server error',
-      message: (error as Error).message
+      message: (error as Error).message,
+      details: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
     });
   }
 }

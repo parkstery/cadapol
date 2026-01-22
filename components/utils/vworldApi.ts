@@ -27,31 +27,25 @@ export class VWorldAPI {
     bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
   ): Promise<AdministrativeBoundary[]> {
     // ✅ Vercel 서버리스 함수를 통한 프록시 사용 (CORS 우회)
+    // ⚠️ 행정경계 데이터셋은 JSONP를 지원하지 않으므로 프록시만 사용
     try {
       return await this.getAdministrativeBoundariesViaProxy(level, bounds);
     } catch (error) {
-      console.warn('VWorld API: Proxy failed, trying JSONP fallback', error);
-      // 프록시 실패 시 JSONP 폴백 (지원되는 경우)
-      return this.getAdministrativeBoundariesJSONP(level, bounds);
+      console.error('VWorld API: Proxy failed', error);
+      // ❌ JSONP 폴백 제거: 행정경계 데이터셋은 JSONP를 지원하지 않음
+      throw new Error(`Failed to load administrative boundaries via proxy: ${(error as Error).message}`);
     }
   }
   
   /**
    * Vercel 서버리스 함수를 통한 행정경계 데이터 조회
+   * ⚠️ 행정경계 데이터셋은 JSONP를 지원하지 않으므로 프록시만 사용
    */
   private static async getAdministrativeBoundariesViaProxy(
     level: 'sido' | 'sigungu' | 'emd',
     bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
   ): Promise<AdministrativeBoundary[]> {
-    // ✅ 프로덕션 환경에서만 프록시 사용, 로컬에서는 JSONP 폴백
-    const isProduction = window.location.hostname === 'cadapol.vercel.app' || 
-                         window.location.hostname.includes('vercel.app');
-    
-    if (!isProduction) {
-      // 로컬 개발 환경에서는 프록시를 사용하지 않고 JSONP 폴백으로 바로 이동
-      throw new Error('Local dev: Use JSONP fallback');
-    }
-    
+    // ✅ 환경 감지 제거: 프록시를 항상 시도 (로컬에서도 Vercel CLI로 테스트 가능)
     let url = `/api/vworld-boundaries?level=${level}`;
     
     if (bounds) {
@@ -59,49 +53,62 @@ export class VWorldAPI {
       url += `&bbox=${encodeURIComponent(bbox)}`;
     }
     
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(`Proxy error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Proxy error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          error: errorData
+        });
+        throw new Error(`Proxy error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+      
+        const data = await response.json();
+      
+      // 응답 검증
+      if (!data || !data.response) {
+        console.error('Invalid API response format:', data);
+        throw new Error('Invalid API response format');
+      }
+      
+      if (data.response.status !== 'OK') {
+        console.error('VWorld API error:', data.response);
+        throw new Error(`API error: ${data.response.status}`);
+      }
+      
+      if (!data.response.result || !data.response.result.featureCollection) {
+        console.warn('VWorld API: No feature collection in response', data.response);
+        return [];
+      }
+      
+      const features = data.response.result.featureCollection.features || [];
+      
+      if (features.length === 0) {
+        console.warn('VWorld API: No features found for the specified bounds');
+        return [];
+      }
+      
+      const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+        const props = feature.properties || {};
+        return {
+          id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
+          name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
+          level,
+          geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
+        };
+      });
+      
+      console.log(`VWorld API: Loaded ${boundaries.length} boundaries via proxy`);
+      return boundaries;
+    } catch (error) {
+      console.error('Proxy fetch failed:', error);
+      console.error('Request URL:', url);
+      throw error;
     }
-    
-    const data = await response.json();
-    
-    // 응답 검증
-    if (!data || !data.response) {
-      throw new Error('Invalid API response format');
-    }
-    
-    if (data.response.status !== 'OK') {
-      console.error('VWorld API error:', data.response);
-      throw new Error(`API error: ${data.response.status}`);
-    }
-    
-    if (!data.response.result || !data.response.result.featureCollection) {
-      console.warn('VWorld API: No feature collection in response');
-      return [];
-    }
-    
-    const features = data.response.result.featureCollection.features || [];
-    
-    if (features.length === 0) {
-      console.warn('VWorld API: No features found for the specified bounds');
-      return [];
-    }
-    
-    const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
-      const props = feature.properties || {};
-      return {
-        id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
-        name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
-        level,
-        geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
-      };
-    });
-    
-    console.log(`VWorld API: Loaded ${boundaries.length} boundaries via proxy`);
-    return boundaries;
   }
   
   /**
