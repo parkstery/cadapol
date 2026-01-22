@@ -47,8 +47,8 @@ export default async function handler(
         break;
     }
 
-    // VWorld API URL 구성
-    let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    // VWorld API URL 구성 (버전 2.0 사용)
+    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
 
     // bbox 파라미터 추가 (선택사항)
     if (bbox && typeof bbox === 'string') {

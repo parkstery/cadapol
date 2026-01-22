@@ -196,7 +196,7 @@ const App = () => {
 
     const script = document.createElement('script');
     script.id = callbackName;
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
+    script.src = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&geomFilter=POINT(${lng} ${lat})&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=false&callback=${callbackName}`;
     script.onerror = () => {
       delete (window as any)[callbackName];
       document.getElementById(callbackName)?.remove();
@@ -224,7 +224,7 @@ const App = () => {
 
     const script = document.createElement('script');
     script.id = callbackName;
-    script.src = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
+    script.src = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=LP_PA_CBND_BUBUN&key=${VWORLD_KEY}&attrFilter=pnu:=:${pnu}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&callback=${callbackName}`;
     document.body.appendChild(script);
   };
 
