@@ -149,7 +149,7 @@ const MapPane: React.FC<MapPaneProps> = ({
               onStateChange: onStateChange,
               // 🆕 거리뷰 컨테이너 전달
               panoContainer: googlePanoRef.current || undefined,
-            }).then(() => {
+            }).then(async () => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
               
@@ -354,7 +354,7 @@ const MapPane: React.FC<MapPaneProps> = ({
               initialState: globalState,
               isSatellite: config.isSatellite,
               onStateChange: onStateChange,
-            }).then(() => {
+            }).then(async () => {
               mapProviderRef.current = provider;
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
               
