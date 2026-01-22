@@ -1775,10 +1775,19 @@ const MapPane: React.FC<MapPaneProps> = ({
     isProgrammaticUpdate.current = true;
     try {
         if (config.type === 'google') {
-          // ✅ Google Maps 인스턴스 확인
-          if (mapRef.current && typeof mapRef.current.setCenter === 'function') {
-            mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
-            mapRef.current.setZoom(globalState.zoom);
+          // ✅ Google Maps 인스턴스 확인 및 좌표 재검증
+          if (mapRef.current && 
+              window.google && window.google.maps &&
+              typeof mapRef.current.setCenter === 'function' &&
+              typeof globalState.lat === 'number' && 
+              typeof globalState.lng === 'number' &&
+              isFinite(globalState.lat) && isFinite(globalState.lng)) {
+            try {
+              mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
+              mapRef.current.setZoom(globalState.zoom);
+            } catch (e) {
+              console.error('Google Maps setCenter error:', e, { lat: globalState.lat, lng: globalState.lng });
+            }
           }
         } else if (config.type === 'kakao') {
           // ✅ 카카오맵이 완전히 초기화되었는지 확인
