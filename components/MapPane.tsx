@@ -3473,9 +3473,9 @@ const MapPane: React.FC<MapPaneProps> = ({
           }`}
         style={isStreetViewActive ? {
           position: 'absolute',
-          // border-4는 16px (4 * 4px)이므로, border가 거리뷰 창 밖으로 나가도록 음수 값 사용
-          bottom: '-16px',  // border 하단이 거리뷰 창 하단에 맞춤
-          left: '-16px',    // border 왼쪽이 거리뷰 창 왼쪽에 맞춤
+          // 거리뷰 창의 좌측과 하단에 바짝 붙이기
+          bottom: '0',
+          left: '0',
           top: 'auto',
           right: 'auto',
           // 모바일에서 60% 크기, 데스크톱에서 기본 크기
