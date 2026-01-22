@@ -3630,6 +3630,23 @@ const MapPane: React.FC<MapPaneProps> = ({
                 throw new Error('RoutingManager가 초기화되지 않았습니다.');
               }
               
+              // ✅ 맵 Provider가 설정되지 않은 경우 다시 설정 시도
+              if (!mapProviderRef.current) {
+                console.warn('[Routing] Map provider not set, attempting to set from current map');
+                // 현재 맵 타입에 맞는 Provider 설정 시도
+                if (config.type === 'google' || config.type === 'kakao' || config.type === 'naver') {
+                  // Provider가 아직 초기화되지 않았을 수 있으므로 에러 발생
+                  throw new Error('맵이 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.');
+                } else {
+                  throw new Error('지원되지 않는 맵 타입입니다.');
+                }
+              }
+              
+              // ✅ RoutingManager에 mapProvider가 설정되어 있는지 확인하고 없으면 설정
+              if (mapProviderRef.current) {
+                routingManagerRef.current.setMapProvider(mapProviderRef.current);
+              }
+              
               const routes = await routingManagerRef.current.calculateRouteFromPlaces(
                 origin,
                 destination,
