@@ -50,15 +50,16 @@ export default async function handler(
     }
 
     // VWorld API URL 구성
-    // 참고: 행정경계 데이터셋은 bbox 파라미터를 지원하지 않을 수 있음
-    // bbox 없이 전체 데이터를 조회한 후 클라이언트에서 필터링하는 방식 고려
-    let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    // 참고: 샘플 코드에서는 version=2.0을 사용하고, geomFilter를 사용함
+    // 행정경계 데이터셋은 전체 조회 시 502 에러가 발생할 수 있으므로 size 제한 추가
+    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&size=1000`;
 
-    // ⚠️ bbox 파라미터 제거: 행정경계 데이터셋은 bbox를 지원하지 않을 수 있음
-    // 대신 전체 데이터를 조회하고 클라이언트에서 필터링
-    // if (bbox && typeof bbox === 'string') {
-    //   url += `&bbox=${bbox}`;
-    // }
+    // 시도(sido) 레벨은 데이터가 적으므로 size 제한 없이 시도
+    // 하지만 502 에러가 계속 발생하면 size 제한이 필요할 수 있음
+    if (level === 'sido') {
+      // 시도는 17개 정도이므로 size 제한 없이 시도
+      url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    }
 
     // VWorld API 호출 (타임아웃 설정)
     const controller = new AbortController();
