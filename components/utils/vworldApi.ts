@@ -140,7 +140,7 @@ export class VWorldAPI {
       const callbackName = `vworld_boundary_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
       
       const domain = ALLOWED_DOMAIN || 'https://cadapol.vercel.app/';
-      let url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+      let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(domain)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
       
       if (bounds) {
         const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
