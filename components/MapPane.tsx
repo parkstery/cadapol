@@ -259,6 +259,9 @@ const MapPane: React.FC<MapPaneProps> = ({
           // window.kakao.maps.load가 준비되었는지 확인
           if (window.kakao.maps && typeof window.kakao.maps.load === 'function') {
             if (containerRef.current) {
+              // ✅ 기존 맵 인스턴스 즉시 null로 설정 (다른 코드가 실행되지 않도록)
+              mapRef.current = null;
+              
               // 기존 Provider 정리 (컨테이너 비우기 전에)
               if (mapProviderRef.current) {
                 try {
