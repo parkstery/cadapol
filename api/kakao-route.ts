@@ -3,7 +3,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const KAKAO_REST_API_KEY = '23767d8cc34ae4b4fc274f621cd85dc7';
+// 환경 변수에서 REST API 키 가져오기 (Vercel Environment Variables에 설정 필요)
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '23767d8cc34ae4b4fc274f621cd85dc7';
 
 export default async function handler(
   req: VercelRequest,
@@ -21,6 +22,16 @@ export default async function handler(
 
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  // REST API 키 확인
+  if (!KAKAO_REST_API_KEY || KAKAO_REST_API_KEY.trim() === '') {
+    console.error('KAKAO_REST_API_KEY is not set');
+    res.status(500).json({ 
+      error: 'Server configuration error',
+      message: 'KAKAO_REST_API_KEY environment variable is not set'
+    });
     return;
   }
 
@@ -58,11 +69,23 @@ export default async function handler(
     }
 
     const apiUrl = 'https://apis-navi.kakaomobility.com/v1/directions';
+    
+    // Authorization 헤더 형식: "KakaoAK {REST_API_KEY}" (공백 포함, 정확한 형식 필수)
+    const authHeader = `KakaoAK ${KAKAO_REST_API_KEY.trim()}`;
+    
+    console.log('[KakaoRoute] Request to Kakao API:', {
+      url: apiUrl,
+      hasKey: !!KAKAO_REST_API_KEY,
+      keyLength: KAKAO_REST_API_KEY.length,
+      keyPrefix: KAKAO_REST_API_KEY.substring(0, 8) + '...',
+      authHeaderPrefix: authHeader.substring(0, 15) + '...',
+      requestBody: JSON.stringify(requestBody).substring(0, 200)
+    });
 
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `KakaoAK ${KAKAO_REST_API_KEY}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
@@ -70,10 +93,33 @@ export default async function handler(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Kakao Directions API error:', response.status, errorText);
+      console.error('[KakaoRoute] Kakao Directions API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText.substring(0, 500),
+        authHeaderUsed: authHeader.substring(0, 20) + '...'
+      });
+      
+      // 401 오류인 경우 상세한 안내 메시지 제공
+      if (response.status === 401) {
+        res.status(401).json({ 
+          error: 'Unauthorized',
+          message: 'Kakao Directions API authentication failed. Please check:',
+          checks: [
+            '1. KAKAO_REST_API_KEY environment variable is set correctly',
+            '2. The key is a REST API key (not JavaScript key)',
+            '3. Kakao Mobility → Directions service is enabled in Kakao Developers',
+            '4. Authorization header format is "KakaoAK {KEY}"',
+            '5. Vercel environment variables are set and redeployed'
+          ],
+          details: errorText.substring(0, 500)
+        });
+        return;
+      }
+      
       res.status(response.status).json({ 
         error: `Kakao API error: ${response.status}`,
-        details: errorText 
+        details: errorText.substring(0, 500)
       });
       return;
     }
