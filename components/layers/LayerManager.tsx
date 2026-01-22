@@ -14,19 +14,23 @@ export class LayerManager {
   private layers: Map<string, Layer> = new Map();
   private mapProvider: MapProvider | null = null;
 
-  setMapProvider(provider: MapProvider | null): void {
+  async setMapProvider(provider: MapProvider | null): Promise<void> {
     this.mapProvider = provider;
     // 맵 제공자 변경 시 모든 레이어 재연결
-    this.layers.forEach(layer => {
+    const attachPromises = Array.from(this.layers.values()).map(layer => {
       if (provider) {
-        layer.attachToMap(provider);
+        return layer.attachToMap(provider).catch(error => {
+          console.error(`Failed to attach layer ${layer.getId()} to map:`, error);
+        });
       } else {
         layer.detachFromMap();
+        return Promise.resolve();
       }
     });
+    await Promise.all(attachPromises);
   }
 
-  addLayer(config: LayerConfig): void {
+  async addLayer(config: LayerConfig): Promise<void> {
     if (this.layers.has(config.id)) {
       console.warn(`Layer with id ${config.id} already exists`);
       return;
@@ -42,11 +46,16 @@ export class LayerManager {
         throw new Error(`Unsupported layer type: ${config.type}`);
     }
     
-    if (this.mapProvider) {
-      layer.attachToMap(this.mapProvider);
+    // ✅ 비동기 처리 추가
+    try {
+      if (this.mapProvider) {
+        await layer.attachToMap(this.mapProvider);
+      }
+      this.layers.set(config.id, layer);
+    } catch (error) {
+      console.error(`Failed to add layer ${config.id}:`, error);
+      throw error; // 에러 전파
     }
-    
-    this.layers.set(config.id, layer);
   }
 
   removeLayer(layerId: string): void {

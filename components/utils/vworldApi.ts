@@ -56,31 +56,55 @@ export class VWorldAPI {
       // fetch API를 사용하여 CORS 우회 시도
       const response = await fetch(url);
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`VWorld API HTTP error: ${response.status}`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       
-      // VWorld API 응답 형식 확인
-      if (data.response && data.response.status === 'OK' && data.response.result) {
-        const features = data.response.result.featureCollection?.features || [];
-        const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
-          const props = feature.properties || {};
-          return {
-            id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
-            name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
-            level,
-            geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
-          };
-        });
-        return boundaries;
-      } else {
-        console.warn('VWorld API: No features found or API error', data.response);
+      // ✅ 응답 검증 강화
+      if (!data || !data.response) {
+        throw new Error('Invalid API response format');
+      }
+      
+      if (data.response.status !== 'OK') {
+        console.error('VWorld API error:', data.response);
+        throw new Error(`API error: ${data.response.status}`);
+      }
+      
+      if (!data.response.result || !data.response.result.featureCollection) {
+        console.warn('VWorld API: No feature collection in response');
         return [];
       }
+      
+      const features = data.response.result.featureCollection.features || [];
+      
+      if (features.length === 0) {
+        console.warn('VWorld API: No features found for the specified bounds');
+        return [];
+      }
+      
+      const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+        const props = feature.properties || {};
+        return {
+          id: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || `boundary-${index}`,
+          name: props.ctp_kor_nm || props.sig_kor_nm || props.emd_kor_nm || 'Unknown',
+          level,
+          geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
+        };
+      });
+      
+      console.log(`VWorld API: Loaded ${boundaries.length} boundaries`);
+      return boundaries;
     } catch (error) {
-      // fetch API 실패 시 JSONP로 폴백
-      console.warn('VWorld API: Fetch failed, trying JSONP', error);
-      return this.getAdministrativeBoundariesJSONP(level, bounds);
+      console.error('VWorld API: Fetch failed', error);
+      // ✅ JSONP 폴백 시도
+      try {
+        return await this.getAdministrativeBoundariesJSONP(level, bounds);
+      } catch (jsonpError) {
+        console.error('VWorld API: Both fetch and JSONP failed', jsonpError);
+        throw new Error('Failed to load administrative boundaries: ' + (error as Error).message);
+      }
     }
   }
   

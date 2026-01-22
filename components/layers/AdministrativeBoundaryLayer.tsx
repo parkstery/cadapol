@@ -69,17 +69,11 @@ export class AdministrativeBoundaryLayer implements Layer {
     }
     
     try {
-      // 맵이 완전히 로드될 때까지 대기
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // ✅ 맵이 완전히 로드될 때까지 대기
+      await this.waitForMapReady(mapInstance, mapProvider.getName());
       
-      // 지도 경계 가져오기 (항상 현재 보이는 영역만 조회)
-      let bounds = this.getMapBounds(mapInstance, mapProvider.getName());
-      
-      // bounds를 가져오지 못한 경우 재시도
-      if (!bounds) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        bounds = this.getMapBounds(mapInstance, mapProvider.getName());
-      }
+      // ✅ bounds 가져오기 재시도 로직 개선
+      let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 3);
       
       if (!bounds) {
         console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
@@ -95,17 +89,83 @@ export class AdministrativeBoundaryLayer implements Layer {
       // VWorld API로 행정경계 데이터 조회 (현재 보이는 영역만)
       const boundaries = await VWorldAPI.getAdministrativeBoundaries(this.level, bounds);
       
-      // 맵 제공자별로 폴리곤 생성
-      this.polygons = boundaries.map(boundary => {
-        return this.createPolygon(boundary, mapProvider);
-      });
+      if (boundaries.length === 0) {
+        console.warn('AdministrativeBoundaryLayer: No boundaries found for the current area');
+        return;
+      }
+      
+      // ✅ null 필터링 및 에러 처리
+      this.polygons = boundaries
+        .map(boundary => {
+          try {
+            return this.createPolygon(boundary, mapProvider);
+          } catch (error) {
+            console.error('Failed to create polygon for boundary:', boundary.id, error);
+            return null;
+          }
+        })
+        .filter(polygon => polygon !== null);
+      
+      if (this.polygons.length === 0) {
+        console.warn('AdministrativeBoundaryLayer: No polygons were created');
+        return;
+      }
       
       if (this.config.visible) {
         this.updateVisibility();
       }
     } catch (error) {
       console.error('AdministrativeBoundaryLayer: Failed to load boundaries', error);
+      throw error; // 에러 전파
     }
+  }
+  
+  // ✅ 새로운 헬퍼 메서드 추가
+  private async waitForMapReady(mapInstance: any, providerName: string): Promise<void> {
+    const maxAttempts = 10;
+    const delay = 200;
+    
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        if (providerName === 'google') {
+          if (mapInstance.getBounds && mapInstance.getCenter) {
+            const bounds = mapInstance.getBounds();
+            const center = mapInstance.getCenter();
+            if (bounds && center) return;
+          }
+        } else if (providerName === 'kakao') {
+          if (mapInstance.getBounds && mapInstance.getCenter) {
+            const bounds = mapInstance.getBounds();
+            const center = mapInstance.getCenter();
+            if (bounds && center) return;
+          }
+        } else if (providerName === 'naver') {
+          if (mapInstance.getBounds && mapInstance.getCenter) {
+            const bounds = mapInstance.getBounds();
+            const center = mapInstance.getCenter();
+            if (bounds && center) return;
+          }
+        }
+      } catch (error) {
+        // 계속 시도
+      }
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    throw new Error('Map instance not ready after maximum attempts');
+  }
+  
+  private async getMapBoundsWithRetry(
+    mapInstance: any,
+    providerName: string,
+    maxRetries: number
+  ): Promise<{ minLat: number; minLng: number; maxLat: number; maxLng: number } | undefined> {
+    for (let i = 0; i < maxRetries; i++) {
+      const bounds = this.getMapBounds(mapInstance, providerName);
+      if (bounds) return bounds;
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    return undefined;
   }
   
   detachFromMap(): void {
@@ -208,13 +268,29 @@ export class AdministrativeBoundaryLayer implements Layer {
     const mapInstance = mapProvider.getMapInstance();
     const providerName = mapProvider.getName();
     
+    if (!mapInstance) {
+      console.error('Map instance not available for polygon creation');
+      return null;
+    }
+    
     try {
       const paths = this.parseGeometry(boundary.geometry);
       
-      if (paths.length === 0) return null;
+      if (paths.length === 0) {
+        console.warn(`No paths found for boundary: ${boundary.id}`);
+        return null;
+      }
+      
+      // ✅ 최소 3개 점 필요 (폴리곤)
+      if (paths.length < 3) {
+        console.warn(`Insufficient points for polygon: ${boundary.id} (${paths.length} points)`);
+        return null;
+      }
+      
+      let polygon: any = null;
       
       if (providerName === 'google') {
-        return new window.google.maps.Polygon({
+        polygon = new window.google.maps.Polygon({
           paths: paths.map(p => ({ lat: p[1], lng: p[0] })),
           strokeColor: '#4285F4',
           strokeOpacity: this.config.opacity,
@@ -226,7 +302,7 @@ export class AdministrativeBoundaryLayer implements Layer {
         });
       } else if (providerName === 'kakao') {
         const kakaoPaths = paths.map(p => new window.kakao.maps.LatLng(p[1], p[0]));
-        return new window.kakao.maps.Polygon({
+        polygon = new window.kakao.maps.Polygon({
           path: kakaoPaths,
           strokeWeight: 2,
           strokeColor: '#4285F4',
@@ -239,7 +315,7 @@ export class AdministrativeBoundaryLayer implements Layer {
         });
       } else if (providerName === 'naver') {
         const naverPaths = paths.map(p => new window.naver.maps.LatLng(p[1], p[0]));
-        return new window.naver.maps.Polygon({
+        polygon = new window.naver.maps.Polygon({
           paths: naverPaths,
           strokeColor: '#4285F4',
           strokeOpacity: this.config.opacity,
@@ -249,53 +325,111 @@ export class AdministrativeBoundaryLayer implements Layer {
           map: this.config.visible ? mapInstance : null,
           zIndex: this.config.zIndex
         });
+      } else {
+        console.error(`Unsupported map provider: ${providerName}`);
+        return null;
       }
+      
+      return polygon;
     } catch (error) {
-      console.error('Failed to create polygon', error);
+      console.error(`Failed to create polygon for boundary ${boundary.id}:`, error);
       return null;
     }
-    
-    return null;
   }
   
   private parseGeometry(geometry: any): number[][] {
-    if (!geometry || !geometry.coordinates) return [];
+    if (!geometry || !geometry.coordinates) {
+      console.warn('Invalid geometry: missing coordinates');
+      return [];
+    }
     
     try {
       if (geometry.type === 'Polygon') {
         // Polygon의 첫 번째 ring (외곽 경계)만 사용
         const outerRing = geometry.coordinates[0];
-        if (!outerRing || outerRing.length === 0) return [];
+        if (!outerRing || outerRing.length === 0) {
+          console.warn('Empty polygon ring');
+          return [];
+        }
         
+        // ✅ 좌표계 감지 개선
         const firstPoint = outerRing[0];
-        let isTM = firstPoint[0] > 180 || firstPoint[1] > 90; // EPSG:5179 감지
+        const isTM = this.detectTMCoordinateSystem(firstPoint);
         
         if (isTM && proj4) {
           try {
             proj4.defs("EPSG:5179", "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs");
             const proj = proj4("EPSG:5179", "EPSG:4326");
             return outerRing.map((coord: number[]) => {
-              const [lon, lat] = proj.forward([coord[0], coord[1]]);
-              return [lon, lat];
-            });
+              try {
+                const [lon, lat] = proj.forward([coord[0], coord[1]]);
+                // ✅ 좌표 유효성 검증
+                if (isNaN(lon) || isNaN(lat) || !isFinite(lon) || !isFinite(lat)) {
+                  console.warn('Invalid converted coordinate:', coord);
+                  return null;
+                }
+                // ✅ 경도/위도 범위 검증
+                if (lon < -180 || lon > 180 || lat < -90 || lat > 90) {
+                  console.warn('Coordinate out of range:', { lon, lat });
+                  return null;
+                }
+                return [lon, lat];
+              } catch (e) {
+                console.error('Coordinate conversion error:', e, coord);
+                return null;
+              }
+            }).filter(coord => coord !== null) as number[][];
           } catch (e) {
             console.error("Proj4 conversion error", e);
             return [];
           }
         } else {
-          return outerRing.map((coord: number[]) => [coord[0], coord[1]]);
+          // ✅ 이미 WGS84인 경우에도 유효성 검증
+          return outerRing
+            .map((coord: number[]) => {
+              const [lon, lat] = coord;
+              if (lon < -180 || lon > 180 || lat < -90 || lat > 90) {
+                console.warn('Coordinate out of range:', coord);
+                return null;
+              }
+              return [lon, lat];
+            })
+            .filter(coord => coord !== null) as number[][];
         }
       } else if (geometry.type === 'MultiPolygon') {
         // MultiPolygon의 경우 첫 번째 Polygon만 사용
         if (geometry.coordinates && geometry.coordinates.length > 0) {
           return this.parseGeometry({ type: 'Polygon', coordinates: geometry.coordinates[0] });
         }
+      } else {
+        console.warn(`Unsupported geometry type: ${geometry.type}`);
       }
     } catch (e) {
       console.error("Geometry parsing error", e);
     }
     
     return [];
+  }
+  
+  // ✅ 새로운 좌표계 감지 메서드
+  private detectTMCoordinateSystem(point: number[]): boolean {
+    if (!point || point.length < 2) return false;
+    
+    const [x, y] = point;
+    
+    // EPSG:5179 (TM) 좌표 범위: 대략 x: 100000~2000000, y: 100000~3000000
+    // WGS84 좌표 범위: 경도 -180~180, 위도 -90~90
+    if (Math.abs(x) > 180 || Math.abs(y) > 90) {
+      // 경도/위도 범위를 벗어나면 TM 좌표로 간주
+      return true;
+    }
+    
+    // 추가 검증: TM 좌표는 보통 큰 값
+    if (Math.abs(x) > 100000 || Math.abs(y) > 100000) {
+      return true;
+    }
+    
+    return false;
   }
   
   private updateVisibility(): void {

@@ -154,7 +154,7 @@ const MapPane: React.FC<MapPaneProps> = ({
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
               
               // 🆕 레이어 관리자 및 길찾기 관리자에 맵 제공자 설정
-              layerManagerRef.current.setMapProvider(provider);
+              await layerManagerRef.current.setMapProvider(provider);
               routingManagerRef.current.setMapProvider(provider);
               
               // 🆕 거리뷰 관련 ref 설정 (기존 코드 호환성)
@@ -308,7 +308,7 @@ const MapPane: React.FC<MapPaneProps> = ({
                   mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
                   
                   // 🆕 레이어 관리자 및 길찾기 관리자에 맵 제공자 설정
-                  layerManagerRef.current.setMapProvider(provider);
+                  await layerManagerRef.current.setMapProvider(provider);
                   routingManagerRef.current.setMapProvider(provider);
                   
                   // 기존 GIS 기능 초기화 (지적 정보 조회 등)
@@ -359,7 +359,7 @@ const MapPane: React.FC<MapPaneProps> = ({
               mapRef.current = provider.getMapInstance(); // 기존 코드 호환성
               
               // 🆕 레이어 관리자 및 길찾기 관리자에 맵 제공자 설정
-              layerManagerRef.current.setMapProvider(provider);
+              await layerManagerRef.current.setMapProvider(provider);
               routingManagerRef.current.setMapProvider(provider);
               
               // 기존 GIS 기능 초기화 (거리뷰 레이어 등)
@@ -3441,26 +3441,35 @@ const MapPane: React.FC<MapPaneProps> = ({
       
       {/* 🆕 행정경계 레이어 토글 버튼 */}
       <button
-        onClick={() => {
+        onClick={async () => {
           const newState = !isAdministrativeLayerOn;
           setIsAdministrativeLayerOn(newState);
           
-          if (newState) {
-            // 행정경계 레이어 추가
-            const layerConfig = createDefaultLayerConfig(
-              LayerType.ADMINISTRATIVE_BOUNDARY,
-              '행정경계',
-              { options: { level: 'sido' } }
-            );
-            layerManagerRef.current.addLayer(layerConfig);
-          } else {
-            // 행정경계 레이어 제거
-            const layers = layerManagerRef.current.getAllLayers();
-            layers.forEach(layer => {
-              if (layer.getType() === LayerType.ADMINISTRATIVE_BOUNDARY) {
-                layerManagerRef.current.removeLayer(layer.getId());
-              }
-            });
+          try {
+            if (newState) {
+              // 행정경계 레이어 추가
+              const layerConfig = createDefaultLayerConfig(
+                LayerType.ADMINISTRATIVE_BOUNDARY,
+                '행정경계',
+                { options: { level: 'sido' } }
+              );
+              // ✅ await 추가
+              await layerManagerRef.current.addLayer(layerConfig);
+              console.log('Administrative boundary layer added successfully');
+            } else {
+              // 행정경계 레이어 제거
+              const layers = layerManagerRef.current.getAllLayers();
+              layers.forEach(layer => {
+                if (layer.getType() === LayerType.ADMINISTRATIVE_BOUNDARY) {
+                  layerManagerRef.current.removeLayer(layer.getId());
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Failed to toggle administrative boundary layer:', error);
+            // ✅ 사용자에게 피드백
+            alert('행정경계 레이어를 불러오는 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
+            setIsAdministrativeLayerOn(!newState); // 상태 롤백
           }
         }}
         className={`absolute top-20 ${config.type === 'naver' ? 'right-[100px]' : 'right-4'} z-[9999] p-1.5 flex items-center justify-center rounded shadow border transition-colors ${
