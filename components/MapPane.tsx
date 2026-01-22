@@ -132,6 +132,9 @@ const MapPane: React.FC<MapPaneProps> = ({
         if (containerRef.current) {
           containerRef.current.innerHTML = '';
           
+          // ✅ 기존 맵 인스턴스 즉시 null로 설정 (다른 코드가 실행되지 않도록)
+          mapRef.current = null;
+          
           // 기존 Provider 정리
           if (mapProviderRef.current) {
             mapProviderRef.current.cleanup();
@@ -339,6 +342,9 @@ const MapPane: React.FC<MapPaneProps> = ({
         if (containerRef.current) {
           containerRef.current.innerHTML = '';
           
+          // ✅ 기존 맵 인스턴스 즉시 null로 설정 (다른 코드가 실행되지 않도록)
+          mapRef.current = null;
+          
           // 기존 Provider 정리
           if (mapProviderRef.current) {
             mapProviderRef.current.cleanup();
@@ -413,6 +419,9 @@ const MapPane: React.FC<MapPaneProps> = ({
     setIsNaverLayerOn(false); 
     setGisMode(GISMode.DEFAULT);
     setIsStreetViewActive(false);
+    
+    // ✅ 맵 인스턴스 즉시 null로 설정 (다른 코드가 실행되지 않도록)
+    mapRef.current = null;
     
     // 🆕 새 Provider 정리
     if (mapProviderRef.current) {
@@ -1828,18 +1837,21 @@ const MapPane: React.FC<MapPaneProps> = ({
                      isFinite(globalState.lat) && isFinite(globalState.lng)) {
             // ✅ Google Maps 인스턴스인지 확인 (카카오/네이버 맵이 아님)
             // Google Maps는 getLevel 메서드가 없고, setCenter가 객체를 받음
-            const isGoogleMapInstance = typeof mapRef.current.setCenter === 'function' &&
-                                       typeof mapRef.current.getZoom === 'function' &&
-                                       typeof mapRef.current.getLevel !== 'function' && // 카카오 맵이 아님
-                                       !(typeof mapRef.current.getCenter === 'function' && 
-                                         mapRef.current.getCenter && 
-                                         typeof mapRef.current.getCenter().lat === 'function'); // 네이버 맵이 아님
-            
-            if (isGoogleMapInstance) {
-              try {
+            try {
+              const isGoogleMapInstance = typeof mapRef.current.setCenter === 'function' &&
+                                         typeof mapRef.current.getZoom === 'function' &&
+                                         typeof mapRef.current.getLevel !== 'function' && // 카카오 맵이 아님
+                                         !(typeof mapRef.current.getCenter === 'function' && 
+                                           mapRef.current.getCenter && 
+                                           typeof mapRef.current.getCenter().lat === 'function'); // 네이버 맵이 아님
+              
+              if (isGoogleMapInstance) {
                 mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
                 mapRef.current.setZoom(globalState.zoom);
-              } catch (e) {
+              }
+            } catch (e) {
+              // mapRef.current가 null이거나 유효하지 않은 인스턴스인 경우 무시
+              if (mapRef.current) {
                 console.error('Google Maps setCenter error:', e, { lat: globalState.lat, lng: globalState.lng });
               }
             }
