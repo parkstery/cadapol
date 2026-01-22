@@ -9,12 +9,11 @@ export class AdministrativeBoundaryLayer implements Layer {
   private config: LayerConfig;
   private mapProvider: MapProvider | null = null;
   private polygons: any[] = [];
-  private level: 'sido' | 'sigungu' | 'emd';
+  private clickListener: any = null;
   
   constructor(config: LayerConfig) {
     this.config = config;
-    // ✅ 테스트용: 기본값을 'emd'로 변경 (자문단 권장)
-    this.level = (config.options?.level as 'sido' | 'sigungu' | 'emd') || 'emd';
+    // ✅ 클릭 기반으로 변경: 시도/시군구 제거, 읍면동만 사용
   }
   
   getId(): string {
@@ -102,6 +101,54 @@ export class AdministrativeBoundaryLayer implements Layer {
     return true;
   }
 
+  /**
+   * 클릭 좌표로 읍면동 단일 폴리곤 조회 (자문단 권장 방식)
+   */
+  private async loadEmdByPoint(lat: number, lng: number): Promise<void> {
+    if (!this.mapProvider) return;
+    
+    try {
+      // ✅ 좌표 기반 읍면동 조회 (geomFilter=POINT 사용)
+      const boundaries = await VWorldAPI.getAdministrativeBoundaryByPoint(lat, lng);
+      
+      if (boundaries.length === 0) {
+        console.warn('[Boundary] No emd boundary found for the clicked point');
+        return;
+      }
+      
+      // 기존 폴리곤 제거
+      this.polygons.forEach(polygon => {
+        try {
+          if (polygon && typeof polygon.setMap === 'function') {
+            polygon.setMap(null);
+          } else if (polygon && typeof polygon.setVisible === 'function') {
+            polygon.setVisible(false);
+          }
+        } catch (e) {
+          console.warn('Failed to remove polygon:', e);
+        }
+      });
+      this.polygons = [];
+      
+      // 새 폴리곤 생성 (단일 읍면동만)
+      const boundary = boundaries[0];
+      try {
+        const polygon = this.createPolygon(boundary, this.mapProvider);
+        if (polygon) {
+          this.polygons = [polygon];
+          if (this.config.visible) {
+            this.updateVisibility();
+          }
+          console.log(`[Boundary] Loaded emd boundary: ${boundary.name}`);
+        }
+      } catch (error) {
+        console.error('Failed to create polygon for boundary:', boundary.id, error);
+      }
+    } catch (error) {
+      console.error('[Boundary] Failed to load emd boundary by point:', error);
+    }
+  }
+
   async attachToMap(mapProvider: MapProvider): Promise<void> {
     this.mapProvider = mapProvider;
     const mapInstance = mapProvider.getMapInstance();
@@ -111,108 +158,79 @@ export class AdministrativeBoundaryLayer implements Layer {
     }
     
     try {
-      // ✅ 맵이 준비될 때까지 짧은 대기 (기존 지적 기능과 유사한 방식)
+      // ✅ 맵이 준비될 때까지 짧은 대기
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // ✅ 줌 레벨 가져오기
-      let zoom: number;
-      try {
-        const state = mapProvider.getState();
-        zoom = state.zoom;
-      } catch (error) {
-        console.warn('AdministrativeBoundaryLayer: Cannot get zoom level, using default 15');
-        zoom = 15;
-      }
+      // ✅ 클릭 이벤트 리스너 등록 (클릭 위치의 최소 행정구역 표시)
+      const providerName = mapProvider.getName();
       
-      // ✅ 줌 레벨에 따라 자동 레벨 결정 (자문단 권장 전략)
-      const autoLevel = this.determineLevelByZoom(zoom);
-      const effectiveLevel = this.level === 'emd' ? autoLevel : this.level;
-      
-      // bounds 가져오기
-      let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
-      
-      if (!bounds) {
-        // ✅ 안전한 기본 bbox 사용 (서울 시청 인근, sigungu 1~2개 수준)
-        // 전국 bbox를 사용하면 반드시 실패하므로 작은 범위 사용
-        const center = this.getMapCenter(mapInstance, mapProvider.getName());
-        if (center) {
-          // 중심 기준 작은 범위 (약 2km)
-          const delta = 0.01;
-          bounds = {
-            minLat: center.lat - delta,
-            minLng: center.lng - delta,
-            maxLat: center.lat + delta,
-            maxLng: center.lng + delta
-          };
-          console.warn(`[Boundary] Cannot get map bounds, using center-based safe bbox:`, bounds);
-        } else {
-          // center도 가져오지 못한 경우 안전한 기본값 (서울 시청 인근)
-          bounds = {
-            minLat: 37.55,
-            minLng: 126.95,
-            maxLat: 37.58,
-            maxLng: 126.99
-          };
-          console.warn(`[Boundary] Cannot get map bounds or center, using default safe bbox:`, bounds);
-        }
-      }
-      
-      // ✅ emd 레벨일 때 bbox 면적 제한 체크
-      let finalLevel = effectiveLevel;
-      if (effectiveLevel === 'emd' && !this.canLoadEmd(bounds, zoom)) {
-        // emd 요청 불가 시 sigungu로 fallback
-        finalLevel = 'sigungu';
-        console.info(`[Boundary] Fallback from emd to sigungu (zoom: ${zoom}, bbox area: ${this.calculateBBoxArea(bounds).toFixed(6)})`);
-      }
-      
-      // ✅ emd 레벨일 때 bbox가 너무 크면 중심 기준 작은 bbox 생성
-      if (finalLevel === 'emd') {
-        const center = this.getMapCenter(mapInstance, mapProvider.getName());
-        if (center) {
-          // 안전한 bbox 크기: ±0.005도 (약 500m 범위)
-          const delta = 0.005;
-          bounds = {
-            minLat: center.lat - delta,
-            minLng: center.lng - delta,
-            maxLat: center.lat + delta,
-            maxLng: center.lng + delta
-          };
-          console.log(`[Boundary] Using small bbox for emd level:`, bounds, `(area: ${this.calculateBBoxArea(bounds).toFixed(6)} deg²)`);
-        }
-      }
-      
-      // VWorld API로 행정경계 데이터 조회
-      const boundaries = await VWorldAPI.getAdministrativeBoundaries(finalLevel, bounds);
-      
-      if (boundaries.length === 0) {
-        console.warn('AdministrativeBoundaryLayer: No boundaries found for the current area');
-        return;
-      }
-      
-      // ✅ null 필터링 및 에러 처리
-      this.polygons = boundaries
-        .map(boundary => {
-          try {
-            return this.createPolygon(boundary, mapProvider);
-          } catch (error) {
-            console.error('Failed to create polygon for boundary:', boundary.id, error);
-            return null;
+      if (providerName === 'kakao') {
+        this.clickListener = (e: any) => {
+          const pos = e.latLng;
+          if (pos) {
+            this.loadEmdByPoint(pos.getLat(), pos.getLng());
           }
-        })
-        .filter(polygon => polygon !== null);
-      
-      if (this.polygons.length === 0) {
-        console.warn('AdministrativeBoundaryLayer: No polygons were created');
-        return;
+        };
+        window.kakao.maps.event.addListener(mapInstance, 'click', this.clickListener);
+      } else if (providerName === 'google') {
+        this.clickListener = (e: any) => {
+          if (e.latLng) {
+            this.loadEmdByPoint(e.latLng.lat(), e.latLng.lng());
+          }
+        };
+        mapInstance.addListener('click', this.clickListener);
+      } else if (providerName === 'naver') {
+        this.clickListener = (e: any) => {
+          if (e.coord) {
+            this.loadEmdByPoint(e.coord.lat(), e.coord.lng());
+          }
+        };
+        window.naver.maps.Event.addListener(mapInstance, 'click', this.clickListener);
       }
       
-      if (this.config.visible) {
-        this.updateVisibility();
-      }
+      console.log('[Boundary] Click listener registered. Click on map to show emd boundary.');
+      
     } catch (error) {
-      console.error('AdministrativeBoundaryLayer: Failed to load boundaries', error);
-      throw error; // 에러 전파
+      console.error('AdministrativeBoundaryLayer: Failed to attach to map', error);
+      throw error;
     }
+  }
+  
+  detachFromMap(): void {
+    // 클릭 리스너 제거
+    if (this.clickListener && this.mapProvider) {
+      const mapInstance = this.mapProvider.getMapInstance();
+      const providerName = this.mapProvider.getName();
+      
+      try {
+        if (providerName === 'kakao' && mapInstance) {
+          window.kakao.maps.event.removeListener(mapInstance, 'click', this.clickListener);
+        } else if (providerName === 'google' && mapInstance) {
+          window.google.maps.event.removeListener(this.clickListener);
+        } else if (providerName === 'naver' && mapInstance) {
+          window.naver.maps.Event.removeListener(this.clickListener);
+        }
+      } catch (e) {
+        console.warn('Failed to remove click listener:', e);
+      }
+      this.clickListener = null;
+    }
+    
+    // 폴리곤 제거
+    this.polygons.forEach(polygon => {
+      try {
+        if (polygon && typeof polygon.setMap === 'function') {
+          polygon.setMap(null);
+        } else if (polygon && typeof polygon.setVisible === 'function') {
+          polygon.setVisible(false);
+        }
+      } catch (e) {
+        console.warn('Failed to remove polygon:', e);
+      }
+    });
+    this.polygons = [];
+    
+    this.mapProvider = null;
   }
   
   private async getMapBoundsWithRetry(

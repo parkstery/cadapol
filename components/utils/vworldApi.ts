@@ -18,9 +18,26 @@ export interface AdministrativeBoundary {
  */
 export class VWorldAPI {
   /**
-   * 행정경계 데이터 조회
-   * @param level 행정경계 레벨 ('sido', 'sigungu', 'emd')
-   * @param bounds 지도 경계 (선택사항, 없으면 전체 조회)
+   * 좌표 기반 읍면동 단일 폴리곤 조회 (자문단 권장 방식)
+   * @param lat 위도
+   * @param lng 경도
+   */
+  static async getAdministrativeBoundaryByPoint(
+    lat: number,
+    lng: number
+  ): Promise<AdministrativeBoundary[]> {
+    // ✅ 좌표 기반 조회: geomFilter=POINT 사용 (bbox 없이 안정적)
+    try {
+      return await this.getAdministrativeBoundaryByPointViaProxy(lat, lng);
+    } catch (error) {
+      console.error('VWorld API: Point-based query failed', error);
+      throw new Error(`Failed to load administrative boundary by point: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 행정경계 데이터 조회 (레거시 - 사용 안 함)
+   * @deprecated Use getAdministrativeBoundaryByPoint instead
    */
   static async getAdministrativeBoundaries(
     level: 'sido' | 'sigungu' | 'emd',
@@ -34,6 +51,92 @@ export class VWorldAPI {
       console.error('VWorld API: Proxy failed', error);
       // ❌ JSONP 폴백 제거: 행정경계 데이터셋은 JSONP를 지원하지 않음
       throw new Error(`Failed to load administrative boundaries via proxy: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 좌표 기반 읍면동 조회 (프록시)
+   */
+  private static async getAdministrativeBoundaryByPointViaProxy(
+    lat: number,
+    lng: number
+  ): Promise<AdministrativeBoundary[]> {
+    const url = `/api/vworld-boundaries-point?lat=${lat}&lng=${lng}`;
+    
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        let errorText = '';
+        let errorData: any = null;
+        
+        try {
+          errorText = await response.text();
+          if (errorText) {
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText.substring(0, 200), raw: errorText };
+            }
+          }
+        } catch (e) {
+          errorText = 'Failed to read error response';
+          errorData = { error: 'Unknown error', readError: (e as Error).message };
+        }
+        
+        console.error('Proxy error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          errorText: errorText.substring(0, 500),
+          errorData
+        });
+        
+        const errorMessage = errorData?.error || errorData?.message || errorText || 'Unknown error';
+        throw new Error(`Proxy error: ${response.status} - ${errorMessage}`);
+      }
+      
+      const data = await response.json();
+      
+      // 응답 검증
+      if (!data || !data.response) {
+        console.error('Invalid API response format:', data);
+        throw new Error('Invalid API response format');
+      }
+      
+      if (data.response.status !== 'OK') {
+        console.error('VWorld API error:', data.response);
+        throw new Error(`API error: ${data.response.status}`);
+      }
+      
+      if (!data.response.result || !data.response.result.featureCollection) {
+        console.warn('VWorld API: No feature collection in response', data.response);
+        return [];
+      }
+      
+      const features = data.response.result.featureCollection.features || [];
+      
+      if (features.length === 0) {
+        console.warn('VWorld API: No features found for the point');
+        return [];
+      }
+      
+      const boundaries: AdministrativeBoundary[] = features.map((feature: any, index: number) => {
+        const props = feature.properties || {};
+        return {
+          id: props.emd_kor_nm || props.emd_cd || `emd-${index}`,
+          name: props.emd_kor_nm || 'Unknown',
+          level: 'emd',
+          geometry: feature.geometry || { type: 'Polygon', coordinates: [] }
+        };
+      });
+      
+      console.log(`VWorld API: Loaded ${boundaries.length} emd boundaries via point query`);
+      return boundaries;
+    } catch (error) {
+      console.error('Proxy fetch failed:', error);
+      console.error('Request URL:', url);
+      throw error;
     }
   }
   
