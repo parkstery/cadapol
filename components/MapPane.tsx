@@ -3642,7 +3642,14 @@ const MapPane: React.FC<MapPaneProps> = ({
               
               // ✅ RoutingManager에 mapProvider가 설정되어 있는지 확인하고 항상 재설정 (상태 동기화 보장)
               console.log('[Routing] Setting mapProvider to RoutingManager:', mapProviderRef.current.getName());
-              routingManagerRef.current.setMapProvider(mapProviderRef.current);
+              
+              try {
+                routingManagerRef.current.setMapProvider(mapProviderRef.current);
+                console.log('[Routing] MapProvider set successfully');
+              } catch (error) {
+                console.error('[Routing] Failed to set mapProvider:', error);
+                throw new Error('맵 제공자를 설정하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+              }
               
               // ✅ 설정 후 확인 (디버깅용)
               console.log('[Routing] MapProvider set, proceeding with route calculation');

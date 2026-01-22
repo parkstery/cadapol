@@ -33,25 +33,48 @@ export class RoutingManager {
     
     // 맵 제공자에 맞는 RoutingProvider 생성
     const providerName = provider.getName();
-    console.log('[RoutingManager] Creating routing provider for:', providerName);
-    
-    if (providerName === 'google') {
-      this.routingProvider = new GoogleRoutingProvider();
-    } else if (providerName === 'kakao') {
-      this.routingProvider = new KakaoRoutingProvider();
-    } else if (providerName === 'Naver') {
-      // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
-      this.routingProvider = new KakaoRoutingProvider();
-    } else {
-      console.error('[RoutingManager] Unsupported provider name:', providerName);
-      this.routingProvider = null;
-      throw new Error(`지원되지 않는 맵 제공자입니다: ${providerName}`);
-    }
-    
-    console.log('[RoutingManager] Routing provider created successfully:', {
-      hasRoutingProvider: !!this.routingProvider,
-      providerName
+    console.log('[RoutingManager] Creating routing provider for:', providerName, {
+      providerType: typeof providerName,
+      providerValue: JSON.stringify(providerName)
     });
+    
+    try {
+      if (providerName === 'google') {
+        this.routingProvider = new GoogleRoutingProvider();
+        console.log('[RoutingManager] GoogleRoutingProvider created');
+      } else if (providerName === 'kakao') {
+        this.routingProvider = new KakaoRoutingProvider();
+        console.log('[RoutingManager] KakaoRoutingProvider created');
+      } else if (providerName === 'Naver') {
+        // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
+        this.routingProvider = new KakaoRoutingProvider();
+        console.log('[RoutingManager] KakaoRoutingProvider created for Naver map');
+      } else {
+        console.error('[RoutingManager] Unsupported provider name:', {
+          providerName,
+          providerNameType: typeof providerName,
+          providerNameLength: providerName?.length,
+          allProviderNames: ['google', 'kakao', 'Naver']
+        });
+        this.routingProvider = null;
+        throw new Error(`지원되지 않는 맵 제공자입니다: ${providerName}`);
+      }
+      
+      if (!this.routingProvider) {
+        throw new Error(`RoutingProvider 생성 실패: ${providerName}`);
+      }
+      
+      console.log('[RoutingManager] Routing provider created successfully:', {
+        hasRoutingProvider: !!this.routingProvider,
+        providerName,
+        routingProviderType: this.routingProvider.constructor.name
+      });
+    } catch (error) {
+      console.error('[RoutingManager] Error creating routing provider:', error);
+      this.routingProvider = null;
+      this.mapProvider = null; // 상태 일관성 유지
+      throw error;
+    }
   }
   
   /**
@@ -66,15 +89,32 @@ export class RoutingManager {
     console.log('[RoutingManager] calculateRouteFromPlaces called', {
       hasRoutingProvider: !!this.routingProvider,
       hasMapProvider: !!this.mapProvider,
-      mapProviderName: this.mapProvider?.getName()
+      mapProviderName: this.mapProvider?.getName(),
+      routingProviderType: this.routingProvider?.constructor?.name
     });
     
-    if (!this.routingProvider || !this.mapProvider) {
-      console.error('[RoutingManager] Missing provider:', {
-        routingProvider: this.routingProvider,
-        mapProvider: this.mapProvider
+    if (!this.mapProvider) {
+      console.error('[RoutingManager] Map provider not set');
+      throw new Error('맵 제공자가 설정되지 않았습니다. 맵이 초기화되었는지 확인해주세요.');
+    }
+    
+    if (!this.routingProvider) {
+      console.error('[RoutingManager] Routing provider not set', {
+        mapProviderName: this.mapProvider.getName(),
+        mapProviderType: this.mapProvider.constructor.name
       });
-      throw new Error('Routing provider or map provider not set');
+      // routingProvider가 없으면 다시 생성 시도
+      console.log('[RoutingManager] Attempting to recreate routing provider...');
+      try {
+        this.setMapProvider(this.mapProvider);
+      } catch (error) {
+        console.error('[RoutingManager] Failed to recreate routing provider:', error);
+        throw new Error(`경로 찾기 제공자를 설정할 수 없습니다: ${this.mapProvider.getName()}`);
+      }
+      
+      if (!this.routingProvider) {
+        throw new Error(`경로 찾기 제공자를 생성할 수 없습니다: ${this.mapProvider.getName()}`);
+      }
     }
     
     // 지명을 좌표로 변환
