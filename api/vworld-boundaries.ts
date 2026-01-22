@@ -47,8 +47,9 @@ export default async function handler(
         break;
     }
 
-    // VWorld API URL 구성 (버전 2.0 사용)
-    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    // VWorld API URL 구성 (버전 1.0 사용 - 행정경계는 2.0 미지원 가능성)
+    // 참고: 지적 경계는 2.0 지원, 행정경계는 1.0만 지원할 수 있음
+    let url = `https://api.vworld.kr/req/data?service=data&version=1.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
 
     // bbox 파라미터 추가 (선택사항)
     if (bbox && typeof bbox === 'string') {
@@ -71,11 +72,13 @@ export default async function handler(
       
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Failed to read error response');
-        console.error(`VWorld API HTTP error: ${response.status}`, errorText);
+        console.error(`VWorld API HTTP error: ${response.status}`);
+        console.error('Error response:', errorText);
+        console.error('Request URL:', url);
         return res.status(500).json({ 
           error: `VWorld API error: ${response.status}`,
-          details: errorText.substring(0, 200),
-          url: url.substring(0, 100) // URL 일부만 로그
+          details: errorText.substring(0, 500),
+          url: url.substring(0, 200)
         });
       }
 
@@ -111,16 +114,21 @@ export default async function handler(
       throw fetchError;
     }
   } catch (error) {
-    console.error('VWorld API proxy error:', error);
+    const errorObj = error as Error;
+    console.error('VWorld API proxy error:', errorObj);
+    console.error('Error name:', errorObj.name);
+    console.error('Error message:', errorObj.message);
+    console.error('Error stack:', errorObj.stack);
     console.error('Request params:', { level, bbox });
     
-    const errorMessage = (error as Error).message;
+    const errorMessage = errorObj.message;
     const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('aborted');
     
     return res.status(isTimeout ? 504 : 500).json({ 
       error: isTimeout ? 'Gateway Timeout' : 'Internal server error',
       message: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
+      errorName: errorObj.name,
+      details: errorObj.stack || 'No stack trace available'
     });
   }
 }
