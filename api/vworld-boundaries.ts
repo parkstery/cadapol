@@ -1,10 +1,23 @@
 // api/vworld-boundaries.ts
 // Vercel 서버리스 함수: VWorld API 프록시 (CORS 우회)
+// ✅ 행정경계 데이터는 정적 데이터로 취급하여 캐싱 적용
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
 const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
+
+// ✅ 인메모리 캐시 (서버리스 함수 인스턴스 재사용 시 효과적)
+// 행정경계 데이터는 거의 변경되지 않으므로 장기 캐싱 가능
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const cache: Map<string, CacheEntry> = new Map();
+
+// 캐시 TTL: 24시간 (행정경계는 거의 변경되지 않음)
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
 
 export default async function handler(
   req: VercelRequest,
@@ -29,11 +42,26 @@ export default async function handler(
   const { level } = req.query;
 
   try {
-
     // 레벨 검증
     if (!level || (level !== 'sido' && level !== 'sigungu' && level !== 'emd')) {
       return res.status(400).json({ error: 'Invalid level parameter' });
     }
+
+    // ✅ 캐시 확인 (행정경계는 정적 데이터이므로 캐싱 우선)
+    const cacheKey = `boundary_${level}`;
+    const cached = cache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      console.log(`[Cache HIT] Returning cached data for level: ${level}`);
+      
+      // 브라우저 캐싱을 위한 헤더 추가
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400'); // 24시간
+      res.setHeader('X-Cache', 'HIT');
+      
+      return res.status(200).json(cached.data);
+    }
+
+    console.log(`[Cache MISS] Fetching from VWorld API for level: ${level}`);
 
     // 데이터셋 선택
     let dataSet = '';
@@ -80,6 +108,19 @@ export default async function handler(
         console.error(`VWorld API HTTP error: ${response.status}`);
         console.error('Error response:', errorText);
         console.error('Request URL:', url);
+        
+        // ✅ 503 에러 발생 시 캐시된 데이터가 있으면 반환
+        if (response.status === 503) {
+          const cached = cache.get(cacheKey);
+          if (cached) {
+            console.log(`[Cache FALLBACK] Returning stale cache due to 503 error for level: ${level}`);
+            res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600'); // 1시간 (stale)
+            res.setHeader('X-Cache', 'STALE');
+            res.setHeader('X-Cache-Status', 'fallback-due-to-503');
+            return res.status(200).json(cached.data);
+          }
+        }
+        
         return res.status(500).json({ 
           error: `VWorld API error: ${response.status}`,
           details: errorText.substring(0, 500),
@@ -121,6 +162,17 @@ export default async function handler(
         });
       }
 
+      // ✅ 캐시에 저장 (행정경계는 정적 데이터이므로 장기 캐싱)
+      cache.set(cacheKey, {
+        data: data,
+        timestamp: Date.now()
+      });
+      console.log(`[Cache SET] Cached data for level: ${level}`);
+
+      // 브라우저 캐싱을 위한 헤더 추가
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400'); // 24시간
+      res.setHeader('X-Cache', 'MISS');
+
       // 성공 응답
       return res.status(200).json(data);
     } catch (fetchError: any) {
@@ -139,6 +191,17 @@ export default async function handler(
       if (fetchError.code === 'UND_ERR_SOCKET' || fetchError.message?.includes('fetch failed')) {
         console.error('VWorld API connection failed:', fetchError);
         console.error('Socket details:', fetchError.cause?.socket || 'No socket info');
+        
+        // ✅ 503 에러 발생 시 캐시된 데이터가 있으면 반환 (서비스 중단 시에도 사용 가능)
+        const cached = cache.get(cacheKey);
+        if (cached) {
+          console.log(`[Cache FALLBACK] Returning stale cache due to 503 error for level: ${level}`);
+          res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600'); // 1시간 (stale)
+          res.setHeader('X-Cache', 'STALE');
+          res.setHeader('X-Cache-Status', 'fallback-due-to-503');
+          return res.status(200).json(cached.data);
+        }
+        
         return res.status(503).json({ 
           error: 'Service Unavailable',
           message: 'Failed to connect to VWorld API. The service may be temporarily unavailable.',
