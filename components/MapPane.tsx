@@ -1448,6 +1448,12 @@ const MapPane: React.FC<MapPaneProps> = ({
 
   // 지적 경계 폴리곤 그리기
   const drawParcelPolygon = (geometry: any, currentMap: any) => {
+    // ✅ 카카오 맵일 때만 실행
+    if (config.type !== 'kakao') {
+      console.warn("drawParcelPolygon: Only supported for Kakao map");
+      return;
+    }
+    
     const kakao = (window as any).kakao;
     if (!currentMap || !kakao || !geometry) {
       console.warn("drawParcelPolygon: Missing required parameters");
@@ -1720,15 +1726,33 @@ const MapPane: React.FC<MapPaneProps> = ({
       });
 
       // 3. 지적 정보 호출 (PNU 조회 -> 폴리곤 생성)
-      fetchCadastralInfoStep1(pos.getLng(), pos.getLat(), currentMap);
+      // ✅ 카카오 맵일 때만 실행
+      if (config.type === 'kakao') {
+        fetchCadastralInfoStep1(pos.getLng(), pos.getLat(), currentMap);
+      }
     };
     kakaoGisRef.current.addressClickListener = onMapClick;
-    window.kakao.maps.event.addListener(mapRef.current, 'click', onMapClick);
+    // ✅ 카카오 맵일 때만 리스너 추가
+    if (config.type === 'kakao' && mapRef.current && window.kakao && window.kakao.maps) {
+      window.kakao.maps.event.addListener(mapRef.current, 'click', onMapClick);
+    }
   };
   
   useEffect(() => {
-    if (config.type === 'kakao' && mapRef.current && sdkLoaded) {
+    // ✅ 카카오 맵일 때만 setupKakaoAddressClick 실행
+    if (config.type === 'kakao' && mapRef.current && sdkLoaded && window.kakao && window.kakao.maps) {
         setupKakaoAddressClick();
+    }
+    // ✅ 네이버 맵으로 전환 시 카카오 맵 리스너 제거
+    if (config.type !== 'kakao' && kakaoGisRef.current.addressClickListener && mapRef.current) {
+      try {
+        if (window.kakao && window.kakao.maps && typeof window.kakao.maps.event.removeListener === 'function') {
+          window.kakao.maps.event.removeListener(mapRef.current, 'click', kakaoGisRef.current.addressClickListener);
+        }
+      } catch (e) {
+        // 무시 (이미 제거되었거나 유효하지 않은 리스너)
+      }
+      kakaoGisRef.current.addressClickListener = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gisMode, config.type, sdkLoaded]);
@@ -1751,11 +1775,14 @@ const MapPane: React.FC<MapPaneProps> = ({
     isProgrammaticUpdate.current = true;
     try {
         if (config.type === 'google') {
-          mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
-          mapRef.current.setZoom(globalState.zoom);
+          // ✅ Google Maps 인스턴스 확인
+          if (mapRef.current && typeof mapRef.current.setCenter === 'function') {
+            mapRef.current.setCenter({ lat: globalState.lat, lng: globalState.lng });
+            mapRef.current.setZoom(globalState.zoom);
+          }
         } else if (config.type === 'kakao') {
-          // 카카오맵이 완전히 초기화되었는지 확인
-          if (mapRef.current && typeof mapRef.current.getCenter === 'function') {
+          // ✅ 카카오맵이 완전히 초기화되었는지 확인
+          if (mapRef.current && window.kakao && window.kakao.maps && typeof mapRef.current.getCenter === 'function') {
             try {
               const center = mapRef.current.getCenter();
               if (center && typeof center.getLat === 'function' && typeof center.getLng === 'function') {
@@ -1774,12 +1801,19 @@ const MapPane: React.FC<MapPaneProps> = ({
         } else if (config.type === 'naver') {
           // ✅ 새 Provider 시스템 사용 시 mapProviderRef를 통해 상태 동기화
           if (useNewProvider && mapProviderRef.current) {
-            mapProviderRef.current.syncState(globalState);
+            try {
+              mapProviderRef.current.syncState(globalState);
+            } catch (e) {
+              console.error('Naver map syncState error:', e);
+            }
           } else if (mapRef.current && window.naver && window.naver.maps) {
             // 기존 방식 (레거시)
             try {
-              mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
-              mapRef.current.setZoom(globalState.zoom);
+              // ✅ mapRef.current가 네이버 맵 인스턴스인지 확인
+              if (typeof mapRef.current.setCenter === 'function' && typeof mapRef.current.setZoom === 'function') {
+                mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
+                mapRef.current.setZoom(globalState.zoom);
+              }
             } catch (e) {
               console.error('Naver map setCenter error:', e);
             }
