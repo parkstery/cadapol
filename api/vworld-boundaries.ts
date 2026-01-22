@@ -55,17 +55,29 @@ export default async function handler(
       url += `&bbox=${bbox}`;
     }
 
-    // VWorld API 호출
-    const response = await fetch(url);
+    // VWorld API 호출 (타임아웃 설정)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25초 타임아웃
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`VWorld API HTTP error: ${response.status}`, errorText);
-      return res.status(response.status).json({ 
-        error: `VWorld API error: ${response.status}`,
-        details: errorText.substring(0, 200)
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Cadapol/1.0'
+        }
       });
-    }
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to read error response');
+        console.error(`VWorld API HTTP error: ${response.status}`, errorText);
+        return res.status(500).json({ 
+          error: `VWorld API error: ${response.status}`,
+          details: errorText.substring(0, 200),
+          url: url.substring(0, 100) // URL 일부만 로그
+        });
+      }
 
     const data = await response.json();
 
@@ -83,15 +95,31 @@ export default async function handler(
       });
     }
 
-    // 성공 응답
-    return res.status(200).json(data);
+      // 성공 응답
+      return res.status(200).json(data);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('VWorld API request timeout');
+        return res.status(504).json({ 
+          error: 'Gateway Timeout',
+          message: 'VWorld API request timed out after 25 seconds'
+        });
+      }
+      
+      throw fetchError;
+    }
   } catch (error) {
     console.error('VWorld API proxy error:', error);
     console.error('Request params:', { level, bbox });
-    console.error('Request URL:', url);
-    return res.status(500).json({ 
-      error: 'Internal server error',
-      message: (error as Error).message,
+    
+    const errorMessage = (error as Error).message;
+    const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('aborted');
+    
+    return res.status(isTimeout ? 504 : 500).json({ 
+      error: isTimeout ? 'Gateway Timeout' : 'Internal server error',
+      message: errorMessage,
       details: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
     });
   }
