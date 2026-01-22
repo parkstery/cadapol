@@ -14,8 +14,17 @@ export class RoutingManager {
   
   setMapProvider(provider: MapProvider | null): void {
     console.log('[RoutingManager] setMapProvider called', {
-      provider: provider?.getName() || 'null'
+      provider: provider?.getName() || 'null',
+      providerInstance: provider
     });
+    
+    if (!provider) {
+      console.warn('[RoutingManager] Setting provider to null, clearing routes');
+      this.mapProvider = null;
+      this.routingProvider = null;
+      this.clearRoutes();
+      return;
+    }
     
     this.mapProvider = provider;
     
@@ -23,26 +32,26 @@ export class RoutingManager {
     this.clearRoutes();
     
     // 맵 제공자에 맞는 RoutingProvider 생성
-    if (provider) {
-      const providerName = provider.getName();
-      console.log('[RoutingManager] Creating routing provider for:', providerName);
-      
-      if (providerName === 'google') {
-        this.routingProvider = new GoogleRoutingProvider();
-      } else if (providerName === 'kakao') {
-        this.routingProvider = new KakaoRoutingProvider();
-      } else if (providerName === 'Naver') {
-        // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
-        this.routingProvider = new KakaoRoutingProvider();
-      } else {
-        console.warn('[RoutingManager] Unsupported provider name:', providerName);
-        this.routingProvider = null;
-      }
-      
-      console.log('[RoutingManager] Routing provider created:', !!this.routingProvider);
+    const providerName = provider.getName();
+    console.log('[RoutingManager] Creating routing provider for:', providerName);
+    
+    if (providerName === 'google') {
+      this.routingProvider = new GoogleRoutingProvider();
+    } else if (providerName === 'kakao') {
+      this.routingProvider = new KakaoRoutingProvider();
+    } else if (providerName === 'Naver') {
+      // 네이버 맵은 카카오 RoutingProvider 사용 (네이버는 직접 길찾기 API가 제한적)
+      this.routingProvider = new KakaoRoutingProvider();
     } else {
+      console.error('[RoutingManager] Unsupported provider name:', providerName);
       this.routingProvider = null;
+      throw new Error(`지원되지 않는 맵 제공자입니다: ${providerName}`);
     }
+    
+    console.log('[RoutingManager] Routing provider created successfully:', {
+      hasRoutingProvider: !!this.routingProvider,
+      providerName
+    });
   }
   
   /**
