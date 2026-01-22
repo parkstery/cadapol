@@ -1810,7 +1810,11 @@ const MapPane: React.FC<MapPaneProps> = ({
             // 기존 방식 (레거시)
             try {
               // ✅ mapRef.current가 네이버 맵 인스턴스인지 확인
-              if (typeof mapRef.current.setCenter === 'function' && typeof mapRef.current.setZoom === 'function') {
+              // 카카오 맵은 getLevel() 메서드가 있지만 네이버 맵은 없음
+              // 네이버 맵은 setCenter, setZoom 메서드가 있음
+              if (typeof mapRef.current.setCenter === 'function' && 
+                  typeof mapRef.current.setZoom === 'function' &&
+                  typeof mapRef.current.getLevel !== 'function') {
                 mapRef.current.setCenter(new window.naver.maps.LatLng(globalState.lat, globalState.lng));
                 mapRef.current.setZoom(globalState.zoom);
               }
