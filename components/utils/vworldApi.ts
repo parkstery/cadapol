@@ -45,11 +45,17 @@ export class VWorldAPI {
     level: 'sido' | 'sigungu' | 'emd',
     bounds?: { minLat: number; minLng: number; maxLat: number; maxLng: number }
   ): Promise<AdministrativeBoundary[]> {
-    // ✅ bbox 파라미터 제거: VWorld API 행정경계 데이터셋은 bbox를 지원하지 않음
-    // 전체 데이터를 조회한 후 클라이언트에서 필터링
-    const url = `/api/vworld-boundaries?level=${level}`;
+    // ✅ 테스트용: dong(emd) 레벨일 때는 bbox 파라미터 포함 (자문단 권장)
+    // sido/sigungu는 전체 데이터 조회 후 클라이언트 필터링
+    let url = `/api/vworld-boundaries?level=${level}`;
     
-    // bounds는 클라이언트 측 필터링에만 사용 (서버 요청에는 포함하지 않음)
+    if (level === 'emd' && bounds) {
+      // dong 레벨: bbox 파라미터 포함 (VWorld API가 안정적으로 응답)
+      const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+      url += `&bbox=${encodeURIComponent(bbox)}`;
+      console.log(`[Test Mode] Requesting dong boundaries with bbox:`, bbox);
+    }
+    // sido/sigungu는 bbox 없이 전체 데이터 조회 (bounds는 클라이언트 필터링에만 사용)
     
     try {
       const response = await fetch(url);

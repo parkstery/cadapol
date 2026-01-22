@@ -72,21 +72,42 @@ export class AdministrativeBoundaryLayer implements Layer {
       // ✅ 맵이 준비될 때까지 짧은 대기 (기존 지적 기능과 유사한 방식)
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // ✅ bounds 가져오기 재시도 로직 (더 관대하게)
-      let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
+      // ✅ 테스트용: dong 레벨일 때는 지도 중심 기준 작은 bbox 사용 (자문단 권장)
+      // sido/sigungu는 전체 bounds 사용, dong은 작은 bbox로 안정성 확보
+      let bounds: { minLat: number; minLng: number; maxLat: number; maxLng: number } | undefined;
       
-      if (!bounds) {
-        console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
-        // 기본 bounds 사용 (서울 지역)
-        bounds = {
-          minLat: 37.4,
-          minLng: 126.8,
-          maxLat: 37.7,
-          maxLng: 127.2
-        };
+      if (this.level === 'emd') {
+        // dong(읍면동) 레벨: 지도 중심 기준 작은 bbox 생성 (검증용 최적 방법)
+        const center = this.getMapCenter(mapInstance, mapProvider.getName());
+        if (center) {
+          const delta = 0.01; // 검증용 고정값 (약 1km 범위)
+          bounds = {
+            minLat: center.lat - delta,
+            minLng: center.lng - delta,
+            maxLat: center.lat + delta,
+            maxLng: center.lng + delta
+          };
+          console.log(`[Test Mode] Using small bbox for dong level:`, bounds);
+        }
       }
       
-      // VWorld API로 행정경계 데이터 조회 (현재 보이는 영역만)
+      // dong이 아니거나 center를 가져오지 못한 경우 전체 bounds 사용
+      if (!bounds) {
+        bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
+        
+        if (!bounds) {
+          console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
+          // 기본 bounds 사용 (서울 지역)
+          bounds = {
+            minLat: 37.4,
+            minLng: 126.8,
+            maxLat: 37.7,
+            maxLng: 127.2
+          };
+        }
+      }
+      
+      // VWorld API로 행정경계 데이터 조회
       const boundaries = await VWorldAPI.getAdministrativeBoundaries(this.level, bounds);
       
       if (boundaries.length === 0) {

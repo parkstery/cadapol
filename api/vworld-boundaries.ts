@@ -78,16 +78,21 @@ export default async function handler(
     }
 
     // VWorld API URL 구성
-    // 참고: 샘플 코드에서는 version=2.0을 사용하고, geomFilter를 사용함
-    // 행정경계 데이터셋은 전체 조회 시 502 에러가 발생할 수 있으므로 size 제한 추가
-    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true&size=1000`;
+    // ✅ 테스트용: dong(emd) 레벨일 때는 bbox 파라미터 포함 (자문단 권장 - 가장 안정적)
+    // sido/sigungu는 전체 데이터 조회 (캐싱 활용)
+    const { bbox } = req.query;
+    
+    let url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
 
-    // 시도(sido) 레벨은 데이터가 적으므로 size 제한 없이 시도
-    // 하지만 502 에러가 계속 발생하면 size 제한이 필요할 수 있음
-    if (level === 'sido') {
-      // 시도는 17개 정도이므로 size 제한 없이 시도
-      url = `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&data=${dataSet}&key=${VWORLD_KEY}&domain=${encodeURIComponent(ALLOWED_DOMAIN)}&crs=EPSG:4326&format=json&errorFormat=json&geometry=true`;
+    // dong(emd) 레벨: bbox 파라미터 포함 (가장 안정적인 방법)
+    if (level === 'emd' && bbox && typeof bbox === 'string') {
+      url += `&bbox=${bbox}`;
+      console.log(`[Test Mode] Using bbox parameter for dong level:`, bbox);
+    } else if (level === 'sigungu') {
+      // 시군구: size 제한 추가
+      url += `&size=1000`;
     }
+    // sido: size 제한 없음 (17개 정도)
 
     // VWorld API 호출 (타임아웃 설정)
     const controller = new AbortController();
