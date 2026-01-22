@@ -61,6 +61,47 @@ export class AdministrativeBoundaryLayer implements Layer {
     return this.config.zIndex;
   }
   
+  /**
+   * bbox 면적 계산 (deg²)
+   */
+  private calculateBBoxArea(bounds: { minLat: number; minLng: number; maxLat: number; maxLng: number }): number {
+    return Math.abs((bounds.maxLng - bounds.minLng) * (bounds.maxLat - bounds.minLat));
+  }
+
+  /**
+   * 줌 레벨에 따라 적절한 행정경계 레벨 결정 (자문단 권장)
+   */
+  private determineLevelByZoom(zoom: number): 'sido' | 'sigungu' | 'emd' {
+    if (zoom >= 14) {
+      return 'emd';
+    } else if (zoom >= 12) {
+      return 'sigungu';
+    } else {
+      return 'sido';
+    }
+  }
+
+  /**
+   * emd 레벨 요청 가능 여부 확인 (bbox 면적 제한)
+   */
+  private canLoadEmd(bounds: { minLat: number; minLng: number; maxLat: number; maxLng: number }, zoom: number): boolean {
+    // 줌 레벨 체크
+    if (zoom < 14) {
+      return false;
+    }
+    
+    // bbox 면적 체크 (안전 상한: 0.0001 deg²)
+    const MAX_EMD_BBOX_AREA = 0.0001;
+    const area = this.calculateBBoxArea(bounds);
+    
+    if (area > MAX_EMD_BBOX_AREA) {
+      console.info(`[Boundary] EMD bbox too large (${area.toFixed(6)} > ${MAX_EMD_BBOX_AREA}), fallback to sigungu`);
+      return false;
+    }
+    
+    return true;
+  }
+
   async attachToMap(mapProvider: MapProvider): Promise<void> {
     this.mapProvider = mapProvider;
     const mapInstance = mapProvider.getMapInstance();
@@ -73,43 +114,60 @@ export class AdministrativeBoundaryLayer implements Layer {
       // ✅ 맵이 준비될 때까지 짧은 대기 (기존 지적 기능과 유사한 방식)
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // ✅ 테스트용: dong 레벨일 때는 지도 중심 기준 작은 bbox 사용 (자문단 권장)
-      // sido/sigungu는 전체 bounds 사용, dong은 작은 bbox로 안정성 확보
-      let bounds: { minLat: number; minLng: number; maxLat: number; maxLng: number } | undefined;
+      // ✅ 줌 레벨 가져오기
+      let zoom: number;
+      try {
+        const state = mapProvider.getState();
+        zoom = state.zoom;
+      } catch (error) {
+        console.warn('AdministrativeBoundaryLayer: Cannot get zoom level, using default 15');
+        zoom = 15;
+      }
       
-      if (this.level === 'emd') {
-        // dong(읍면동) 레벨: 지도 중심 기준 작은 bbox 생성 (검증용 최적 방법)
+      // ✅ 줌 레벨에 따라 자동 레벨 결정 (자문단 권장 전략)
+      const autoLevel = this.determineLevelByZoom(zoom);
+      const effectiveLevel = this.level === 'emd' ? autoLevel : this.level;
+      
+      // bounds 가져오기
+      let bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
+      
+      if (!bounds) {
+        console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
+        // 기본 bounds 사용 (서울 지역)
+        bounds = {
+          minLat: 37.4,
+          minLng: 126.8,
+          maxLat: 37.7,
+          maxLng: 127.2
+        };
+      }
+      
+      // ✅ emd 레벨일 때 bbox 면적 제한 체크
+      let finalLevel = effectiveLevel;
+      if (effectiveLevel === 'emd' && !this.canLoadEmd(bounds, zoom)) {
+        // emd 요청 불가 시 sigungu로 fallback
+        finalLevel = 'sigungu';
+        console.info(`[Boundary] Fallback from emd to sigungu (zoom: ${zoom}, bbox area: ${this.calculateBBoxArea(bounds).toFixed(6)})`);
+      }
+      
+      // ✅ emd 레벨일 때 bbox가 너무 크면 중심 기준 작은 bbox 생성
+      if (finalLevel === 'emd') {
         const center = this.getMapCenter(mapInstance, mapProvider.getName());
         if (center) {
-          const delta = 0.01; // 검증용 고정값 (약 1km 범위)
+          // 안전한 bbox 크기: ±0.005도 (약 500m 범위)
+          const delta = 0.005;
           bounds = {
             minLat: center.lat - delta,
             minLng: center.lng - delta,
             maxLat: center.lat + delta,
             maxLng: center.lng + delta
           };
-          console.log(`[Test Mode] Using small bbox for dong level:`, bounds);
-        }
-      }
-      
-      // dong이 아니거나 center를 가져오지 못한 경우 전체 bounds 사용
-      if (!bounds) {
-        bounds = await this.getMapBoundsWithRetry(mapInstance, mapProvider.getName(), 5);
-        
-        if (!bounds) {
-          console.warn('AdministrativeBoundaryLayer: Cannot get map bounds, using default bounds');
-          // 기본 bounds 사용 (서울 지역)
-          bounds = {
-            minLat: 37.4,
-            minLng: 126.8,
-            maxLat: 37.7,
-            maxLng: 127.2
-          };
+          console.log(`[Boundary] Using small bbox for emd level:`, bounds, `(area: ${this.calculateBBoxArea(bounds).toFixed(6)} deg²)`);
         }
       }
       
       // VWorld API로 행정경계 데이터 조회
-      const boundaries = await VWorldAPI.getAdministrativeBoundaries(this.level, bounds);
+      const boundaries = await VWorldAPI.getAdministrativeBoundaries(finalLevel, bounds);
       
       if (boundaries.length === 0) {
         console.warn('AdministrativeBoundaryLayer: No boundaries found for the current area');
