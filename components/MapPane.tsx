@@ -8,21 +8,6 @@ import { MapProvider } from './map-providers/BaseMapProvider';
 import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
-          // 내용 HTML
-          contentDiv.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:6px;">
-              <div style=\"display:flex; align-items:center; justify-content:space-between;\">
-                <div id=\"cadastral-pnu-header\" style=\"font-size:12px; color:#3b82f6; font-weight:700; text-transform:uppercase; min-width:60px;\"></div>
-                <div id=\"cadastral-coords\" style=\"font-size:11px; color:#64748b; font-family:monospace;\">X: ${lng} Y: ${lat}</div>
-              </div>
-
-              <div style=\"font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;\">${mainAddr}</div>
-              ${subAddr ? `<div style=\"font-size: 12px; color: #64748b; margin-top: 2px;\">(지번) ${subAddr}</div>` : ''}
-            </div>
-
-            <div style=\"position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 12px; height: 12px; background: rgba(255, 255, 255, 0.95); border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1);\"></div>
-            <style>@keyframes fadeIn { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: translateY(-45px); } }</style>
-          `;
   onStreetViewChange: (state: { lat: number, lng: number, active: boolean } | null) => void;
 }
 
