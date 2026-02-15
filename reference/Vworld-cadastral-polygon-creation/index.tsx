@@ -133,8 +133,9 @@ const App = () => {
             transform: translateY(-45px);
             animation: fadeIn 0.3s ease-out;
           ">
-            <div style="font-size: 11px; color: #3b82f6; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">
-              Selected Location
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
+              <div style="font-size:11px; color:#3b82f6; font-weight:700; text-transform:uppercase;">Position</div>
+              <div style="font-family: monospace; font-weight:700; color:#0f172a; font-size:12px;">X: ${lng} &nbsp; Y: ${lat}</div>
             </div>
             <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
               ${mainAddr}

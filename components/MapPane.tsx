@@ -1681,21 +1681,22 @@ const MapPane: React.FC<MapPaneProps> = ({
           closeBtn.innerHTML = '✕';
           closeBtn.style.cssText = `
             position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 20px;
-            height: 20px;
+            top: -10px;
+            right: -10px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
-            background: rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.95);
             color: #64748b;
-            border: none;
+            border: 1px solid rgba(0,0,0,0.06);
             cursor: pointer;
-            font-size: 12px;
+            font-size: 14px;
             line-height: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(2,6,23,0.08);
+            transition: all 0.12s ease-in-out;
           `;
           closeBtn.title = '닫기';
           closeBtn.onmouseover = () => {
@@ -1736,8 +1737,9 @@ const MapPane: React.FC<MapPaneProps> = ({
           
           // 내용 HTML
           contentDiv.innerHTML = `
-            <div style="font-size: 11px; color: #3b82f6; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">
-              Selected Location
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
+              <div style=\"font-size:11px; color:#3b82f6; font-weight:700; text-transform:uppercase;\">Position</div>
+              <div style=\"font-family: monospace; font-weight:700; color:#0f172a; font-size:12px;\">X: ${lng} &nbsp; Y: ${lat}</div>
             </div>
             <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
               ${mainAddr}
@@ -1745,8 +1747,8 @@ const MapPane: React.FC<MapPaneProps> = ({
             ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
             
             <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
-              <div style="display:flex; justify-content:space-between;"><span>X</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
-              <div style="display:flex; justify-content:space-between;"><span>Y</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
+              <div style="display:flex; justify-content:space-between;"><span style=\"font-weight:600;\">Lng</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
+              <div style="display:flex; justify-content:space-between;"><span style=\"font-weight:600;\">Lat</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
             </div>
             
             <div id="cadastral-pnu-section" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
