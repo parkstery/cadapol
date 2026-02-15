@@ -1708,31 +1708,19 @@ const MapPane: React.FC<MapPaneProps> = ({
           }, true);
           closeBtn.addEventListener('click', handleCloseBtnClick, true);
           
-          // 내용 HTML
+          // 내용 HTML (헤더에 PNU, 우측 상단에 한 줄 좌표)
           contentDiv.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
-              <div style=\"font-size:11px; color:#3b82f6; font-weight:700; text-transform:uppercase;\">Position</div>
-              <div style=\"font-family: monospace; font-weight:700; color:#0f172a; font-size:12px;\">X: ${lng} &nbsp; Y: ${lat}</div>
-            </div>
-            <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
-              ${mainAddr}
-            </div>
-            ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
-            
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
-              <div style="display:flex; justify-content:space-between;"><span style=\"font-weight:600;\">Lng</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
-              <div style="display:flex; justify-content:space-between;"><span style=\"font-weight:600;\">Lat</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
-            </div>
-            
-            <div id="cadastral-pnu-section" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
-              <!-- PNU 정보는 fetchCadastralInfoStep1에서 추가됨 -->
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style=\"display:flex; align-items:center; justify-content:space-between;\">
+                <div id=\"cadastral-pnu-header\" style=\"font-size:12px; color:#3b82f6; font-weight:700; text-transform:uppercase; min-width:60px;\"></div>
+                <div id=\"cadastral-coords\" style=\"font-size:11px; color:#64748b; font-family:monospace;\">X: ${lng} Y: ${lat}</div>
+              </div>
+
+              <div style=\"font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;\">${mainAddr}</div>
+              ${subAddr ? `<div style=\"font-size: 12px; color: #64748b; margin-top: 2px;\">(지번) ${subAddr}</div>` : ''}
             </div>
 
-            <div style="
-              position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg);
-              width: 12px; height: 12px; background: rgba(255, 255, 255, 0.95);
-              border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1);
-            "></div>
+            <div style=\"position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 12px; height: 12px; background: rgba(255, 255, 255, 0.95); border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1);\"></div>
             <style>@keyframes fadeIn { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: translateY(-45px); } }</style>
           `;
           
