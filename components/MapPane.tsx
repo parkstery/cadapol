@@ -8,32 +8,21 @@ import { MapProvider } from './map-providers/BaseMapProvider';
 import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
-// 🆕 GIS 도구
-import { DistanceMeasure } from './gis-tools/DistanceMeasure';
-import { AreaMeasure } from './gis-tools/AreaMeasure';
-// 🆕 레이어 시스템
-import { LayerManager } from './layers/LayerManager';
-import { LayerType } from '../types';
-import { createDefaultLayerConfig } from './layers/BaseLayer';
-// 🆕 길찾기 시스템
-import { RoutingManager } from './routing/RoutingManager';
-import { RoutingPanel } from './RoutingPanel';
-import { MINIMAP_SIZE } from './utils/constants';
+          // 내용 HTML
+          contentDiv.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style=\"display:flex; align-items:center; justify-content:space-between;\">
+                <div id=\"cadastral-pnu-header\" style=\"font-size:12px; color:#3b82f6; font-weight:700; text-transform:uppercase; min-width:60px;\"></div>
+                <div id=\"cadastral-coords\" style=\"font-size:11px; color:#64748b; font-family:monospace;\">X: ${lng} Y: ${lat}</div>
+              </div>
 
-// VWorld API 설정
-const VWORLD_KEY = '04FADF88-BBB0-3A72-8404-479547569E44';
-// VWorld API는 도메인 제한이 있으므로 reference 코드와 동일한 도메인 사용
-const ALLOWED_DOMAIN = 'https://cadapol.vercel.app/';
+              <div style=\"font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;\">${mainAddr}</div>
+              ${subAddr ? `<div style=\"font-size: 12px; color: #64748b; margin-top: 2px;\">(지번) ${subAddr}</div>` : ''}
+            </div>
 
-interface MapPaneProps {
-  side: 'left' | 'right';
-  config: PaneConfig;
-  globalState: MapState;
-  onStateChange: (state: MapState) => void;
-  searchPos: { lat: number, lng: number } | null;
-  isFullscreen: boolean;
-  onToggleFullscreen: () => void;
-  streetViewState: { lat: number, lng: number, active: boolean } | null;
+            <div style=\"position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 12px; height: 12px; background: rgba(255, 255, 255, 0.95); border-bottom: 1px solid rgba(0,0,0,0.1); border-right: 1px solid rgba(0,0,0,0.1);\"></div>
+            <style>@keyframes fadeIn { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: translateY(-45px); } }</style>
+          `;
   onStreetViewChange: (state: { lat: number, lng: number, active: boolean } | null) => void;
 }
 
@@ -1427,28 +1416,15 @@ const MapPane: React.FC<MapPaneProps> = ({
         
         // PNU 정보 저장 (infowindow 업데이트용)
         kakaoGisRef.current.cadastralPNU = pnu;
-        
-        // infowindow에 PNU 정보 추가
+
+        // infowindow 헤더에 PNU 표시 (하단 PNU는 제거됨)
         if (kakaoGisRef.current.cadastralOverlay && pnu) {
           const contentDiv = kakaoGisRef.current.cadastralOverlay.getContent();
           if (contentDiv) {
-            // PNU 섹션 찾기 또는 생성
-            let pnuSection = contentDiv.querySelector('#cadastral-pnu-section');
-            if (!pnuSection) {
-              // PNU 섹션이 없으면 생성
-              pnuSection = document.createElement('div');
-              pnuSection.id = 'cadastral-pnu-section';
-              pnuSection.style.cssText = 'margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;';
-              
-              // 좌표 정보 섹션 뒤에 삽입
-              const coordSection = contentDiv.querySelector('div[style*="margin-top: 8px"]');
-              if (coordSection && coordSection.parentNode) {
-                coordSection.parentNode.insertBefore(pnuSection, coordSection.nextSibling);
-              }
+            const headerEl = contentDiv.querySelector('#cadastral-pnu-header');
+            if (headerEl) {
+              headerEl.textContent = pnu;
             }
-            
-            // PNU 정보 업데이트
-            pnuSection.innerHTML = `<div style="display:flex; justify-content:space-between;"><span>PNU</span> <span style="font-family: monospace; font-weight:600;">${pnu}</span></div>`;
           }
         }
         

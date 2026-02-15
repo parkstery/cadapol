@@ -133,19 +133,15 @@ const App = () => {
             transform: translateY(-45px);
             animation: fadeIn 0.3s ease-out;
           ">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
-              <div style="font-size:11px; color:#3b82f6; font-weight:700; text-transform:uppercase;">Position</div>
-              <div style="font-family: monospace; font-weight:700; color:#0f172a; font-size:12px;">X: ${lng} &nbsp; Y: ${lat}</div>
-            </div>
-            <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;">
-              ${mainAddr}
-            </div>
-            ${subAddr ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">(지번) ${subAddr}</div>` : ''}
-            
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); font-size: 11px; color: #64748b;">
-              <div style="display:flex; justify-content:space-between;"><span>X</span> <span style="font-family: monospace; font-weight:600;">${lng}</span></div>
-              <div style="display:flex; justify-content:space-between;"><span>Y</span> <span style="font-family: monospace; font-weight:600;">${lat}</span></div>
-            </div>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                  <div style=\"display:flex; align-items:center; justify-content:space-between;\">
+                    <div id=\"cadastral-pnu-header\" style=\"font-size:12px; color:#3b82f6; font-weight:700; text-transform:uppercase; min-width:60px;\"></div>
+                    <div id=\"cadastral-coords\" style=\"font-size:11px; color:#64748b; font-family:monospace;\">X: ${lng} Y: ${lat}</div>
+                  </div>
+
+                  <div style=\"font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.4; word-break: keep-all;\">${mainAddr}</div>
+                  ${subAddr ? `<div style=\"font-size: 12px; color: #64748b; margin-top: 2px;\">(지번) ${subAddr}</div>` : ''}
+                </div>
 
             <div style="
               position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%) rotate(45deg);
@@ -187,7 +183,20 @@ const App = () => {
       if (data.response && data.response.status === 'OK' && data.response.result.featureCollection.features.length > 0) {
         const feature = data.response.result.featureCollection.features[0];
         const pnu = feature.properties.pnu;
-        
+
+        // 오버레이 헤더에 PNU 반영 (하단 PNU는 표시하지 않음)
+        if (overlayRef.current && pnu) {
+          try {
+            const contentDiv = overlayRef.current.getContent();
+            if (contentDiv) {
+              const headerEl = contentDiv.querySelector('#cadastral-pnu-header');
+              if (headerEl) headerEl.textContent = pnu;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
         // 2단계: PNU로 폴리곤 조회 호출
         if (pnu) {
           fetchGeometryByPNUStep2(pnu, currentMap);
