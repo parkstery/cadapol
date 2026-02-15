@@ -8,7 +8,19 @@ import { MapProvider } from './map-providers/BaseMapProvider';
 import { GoogleMapProvider } from './map-providers/GoogleMapProvider';
 import { KakaoMapProvider } from './map-providers/KakaoMapProvider';
 import { NaverMapProvider } from './map-providers/NaverMapProvider';
-  onStreetViewChange: (state: { lat: number, lng: number, active: boolean } | null) => void;
+
+type Side = 'left' | 'right';
+
+interface MapPaneProps {
+  side: Side;
+  config: PaneConfig;
+  globalState: MapState;
+  onStateChange: (state: MapState) => void;
+  searchPos: { lat: number; lng: number } | null;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  streetViewState: { lat: number; lng: number; active: boolean } | null;
+  onStreetViewChange: (state: { lat: number; lng: number; active: boolean } | null) => void;
 }
 
 const MapPane: React.FC<MapPaneProps> = ({ 
